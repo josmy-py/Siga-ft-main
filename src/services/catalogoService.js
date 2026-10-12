@@ -5,7 +5,16 @@ import baseService from './baseService';
 // eliminar solo para DIRECTOR (la API responde 403 a los demás, 409 si el
 // registro está en uso y 422 con `errors` por campo si la validación falla).
 // Aún no hay pantallas conectadas: los formularios deben migrar a este servicio.
-export const gradoService = baseService('/grados');                 // { nombre, orden }
+// Grados: el nombre debe ser uno del catálogo oficial (la API devuelve su orden académico)
+export const gradoService = {
+    ...baseService('/grados'),          // { nombre }
+
+    // [{ nombre, orden, grado_id }] grado_id es null si aún no está registrado
+    async catalogo() {
+        const response = await api.get('/grados/catalogo');
+        return response.data.catalogo;
+    }
+};
 export const especialidadService = baseService('/especialidades');  // { nombre } (máx. 20)
 export const discapacidadService = baseService('/discapacidades');  // { nombre }
 export const enfermedadService = baseService('/enfermedades');      // { nombre, medicamento }

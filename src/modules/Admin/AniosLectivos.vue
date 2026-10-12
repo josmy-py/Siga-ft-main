@@ -5,25 +5,15 @@ import { anioLectivoService, periodoEscolarService } from "@/services/calendario
 import { erroresCampos, mensajeError } from "@/services/api";
 
 const ESTADOS_ANIO = {
-  planificado: { etiqueta: "Planificado", clase: "bg-amber-100 text-amber-700" },
+  inactivo: { etiqueta: "Inactivo", clase: "bg-amber-100 text-amber-700" },
   activo: { etiqueta: "Activo", clase: "bg-green-100 text-green-700" },
-  cerrado: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
+  cierre: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
 };
 
 const ESTADOS_PERIODO = {
   pendiente: { etiqueta: "Pendiente", clase: "bg-amber-100 text-amber-700" },
   abierto: { etiqueta: "Abierto", clase: "bg-green-100 text-green-700" },
   cerrado: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
-};
-
-const ACCIONES = {
-  crear: "Creación",
-  editar: "Edición",
-  activar: "Activación",
-  cerrar: "Cierre",
-  abrir: "Apertura",
-  reabrir: "Reapertura",
-  eliminar: "Eliminación",
 };
 
 const DIAGNOSTICO = {
@@ -33,9 +23,7 @@ const DIAGNOSTICO = {
   secciones_sin_anio: "Secciones sin año lectivo",
   matriculas_sin_anio: "Matrículas sin año lectivo",
   matriculas_con_otro_anio_que_su_seccion: "Matrículas con un año distinto al de su sección",
-  anios_solo_en_asignaciones: "Años que solo aparecen en asignaciones",
-  asignaciones_sin_anio_lectivo: "Asignaciones cuyo año no corresponde a ningún año lectivo",
-  asignaciones_con_otro_anio_que_su_seccion: "Asignaciones con un año distinto al de su sección",
+  padres_sin_estudiantes: "Padres sin estudiantes vinculados (los vincula el director)",
 };
 
 const anios = ref([]);
@@ -43,8 +31,6 @@ const cargando = ref(false);
 const errorCarga = ref(null);
 const seleccionadoId = ref(null);
 
-const historial = ref([]);
-const errorHistorial = ref(null);
 const diagnostico = ref(null);
 const errorDiagnostico = ref(null);
 
@@ -60,7 +46,7 @@ const erroresPeriodos = ref({});
 
 const seleccionado = computed(() => anios.value.find((a) => a.id === seleccionadoId.value) ?? null);
 const hayAbierto = computed(() => (seleccionado.value?.periodos ?? []).some((p) => p.estado === "abierto"));
-const ultimoNumero = computed(() => Math.max(0, ...(seleccionado.value?.periodos ?? []).map((p) => p.numero ?? 0)));
+const ultimoNivel = computed(() => Math.max(0, ...(seleccionado.value?.periodos ?? []).map((p) => p.nivel ?? 0)));
 
 const fecha = (valor) => {
   if (!valor) return "Sin fecha";
@@ -68,27 +54,14 @@ const fecha = (valor) => {
   return `${d}/${m}/${a}`;
 };
 
-const fechaHora = (valor) => (valor ? new Date(valor).toLocaleString("es-SV") : "");
-
 const prepararPeriodos = () => {
   edicionPeriodos.value = Object.fromEntries(
     (seleccionado.value?.periodos ?? []).map((p) => [
       p.id,
-      { nombre: p.nombre ?? "", fecha_inicio: p.fecha_inicio ?? "", fecha_fin: p.fecha_fin ?? "" },
+      { nombre: p.nombre ?? "" },
     ]),
   );
   erroresPeriodos.value = {};
-};
-
-const cargarHistorial = async () => {
-  historial.value = [];
-  errorHistorial.value = null;
-  if (!seleccionadoId.value) return;
-  try {
-    historial.value = await anioLectivoService.historial(seleccionadoId.value);
-  } catch (error) {
-    errorHistorial.value = mensajeError(error, "No se pudo cargar el historial");
-  }
 };
 
 const cargarDiagnostico = async () => {
@@ -110,7 +83,7 @@ const cargar = async () => {
       seleccionadoId.value = anios.value[0]?.id ?? null;
     }
     prepararPeriodos();
-    await Promise.all([cargarHistorial(), cargarDiagnostico()]);
+    await cargarDiagnostico();
   } catch (error) {
     errorCarga.value = mensajeError(error, "No se pudieron cargar los años lectivos");
   } finally {
@@ -120,11 +93,10 @@ const cargar = async () => {
 
 onMounted(cargar);
 
-const seleccionar = async (anio) => {
+const seleccionar = (anio) => {
   seleccionadoId.value = anio.id;
   formAnio.value = null;
   prepararPeriodos();
-  await cargarHistorial();
 };
 
 const exito = (mensaje) => Swal.fire({ icon: "success", title: mensaje, timer: 2500, showConfirmButton: false });
@@ -210,7 +182,7 @@ const cerrarAnio = async () => {
 
 const eliminarAnio = async () => {
   const a = seleccionado.value;
-  if (!(await confirmar(`¿Eliminar el año lectivo ${a.nombre}?`, "Solo se eliminan años planificados sin secciones, matrículas ni registros académicos."))) return;
+  if (!(await confirmar(`¿Eliminar el año lectivo ${a.nombre}?`, "Solo se eliminan años inactivos sin secciones, matrículas ni registros académicos."))) return;
   await ejecutar(() => anioLectivoService.eliminar(a.id), "No se pudo eliminar el año lectivo");
 };
 
@@ -222,8 +194,6 @@ const agregarPeriodo = async () => {
 
 const guardarPeriodo = async (periodo) => {
   const datos = { ...edicionPeriodos.value[periodo.id] };
-  if (!datos.fecha_inicio) datos.fecha_inicio = null;
-  if (!datos.fecha_fin) datos.fecha_fin = null;
 
   ocupado.value = true;
   erroresPeriodos.value = { ...erroresPeriodos.value, [periodo.id]: {} };
@@ -253,7 +223,7 @@ const reabrirPeriodo = async (periodo) => {
   const { value: motivo, isConfirmed } = await Swal.fire({
     icon: "warning",
     title: `Reabrir ${periodo.nombre}`,
-    text: "Indique el motivo. Quedará registrado en el historial.",
+    text: "Indique el motivo. Quedará registrado en el registro del sistema.",
     input: "textarea",
     inputPlaceholder: "Motivo de la reapertura (mínimo 10 caracteres)",
     showCancelButton: true,
@@ -387,16 +357,16 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                 </h2>
                 <p class="text-slate-500 mt-1">{{ fecha(seleccionado.fecha_inicio) }} al {{ fecha(seleccionado.fecha_fin) }}</p>
                 <p v-if="!seleccionado.fecha_inicio || !seleccionado.fecha_fin" class="text-amber-700 text-sm mt-1">
-                  Complete las fechas del año antes de activarlo o de fechar sus periodos.
+                  Complete las fechas del año antes de activarlo.
                 </p>
               </div>
 
               <div class="flex flex-wrap gap-2">
-                <button v-if="seleccionado.estado !== 'cerrado'" :disabled="ocupado" @click="editarAnio"
+                <button v-if="seleccionado.estado !== 'cierre'" :disabled="ocupado" @click="editarAnio"
                   :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                   <i class="pi pi-pencil"></i> Editar
                 </button>
-                <button v-if="seleccionado.estado === 'planificado'" :disabled="ocupado" @click="activarAnio"
+                <button v-if="seleccionado.estado === 'inactivo'" :disabled="ocupado" @click="activarAnio"
                   :class="[botonBase, 'border-green-600 text-green-700 hover:bg-green-600 hover:text-white']">
                   <i class="pi pi-play"></i> Activar
                 </button>
@@ -404,7 +374,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                   :class="[botonBase, 'border-slate-500 text-slate-700 hover:bg-slate-600 hover:text-white']">
                   <i class="pi pi-lock"></i> Cerrar año
                 </button>
-                <button v-if="seleccionado.estado === 'planificado'" :disabled="ocupado" @click="eliminarAnio"
+                <button v-if="seleccionado.estado === 'inactivo'" :disabled="ocupado" @click="eliminarAnio"
                   :class="[botonBase, 'border-red-500 text-red-600 hover:bg-red-500 hover:text-white']">
                   <i class="pi pi-trash"></i> Eliminar
                 </button>
@@ -416,7 +386,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
           <div class="bg-white rounded-3xl shadow-xl p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-semibold text-slate-800">Periodos</h3>
-              <button v-if="seleccionado.estado !== 'cerrado' && (seleccionado.periodos?.length ?? 0) < 6" :disabled="ocupado" @click="agregarPeriodo"
+              <button v-if="seleccionado.estado !== 'cierre' && (seleccionado.periodos?.length ?? 0) < 6" :disabled="ocupado" @click="agregarPeriodo"
                 :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                 <i class="pi pi-plus"></i> Agregar periodo
               </button>
@@ -425,39 +395,27 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             <p v-if="!seleccionado.periodos?.length" class="text-slate-500 text-sm">Este año lectivo no tiene periodos.</p>
 
             <div class="overflow-x-auto">
-              <table v-if="seleccionado.periodos?.length" class="w-full min-w-[720px] border-collapse">
+              <table v-if="seleccionado.periodos?.length" class="w-full min-w-[560px] border-collapse">
                 <thead>
                   <tr>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">N.º</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nombre</th>
-                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Inicio</th>
-                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Fin</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Estado</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="periodo in seleccionado.periodos" :key="periodo.id" class="align-top">
-                    <td class="px-3 py-3 border-b border-slate-200">{{ periodo.numero }}</td>
+                    <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nivel }}</td>
 
-                    <template v-if="periodo.estado === 'pendiente' && seleccionado.estado !== 'cerrado' && edicionPeriodos[periodo.id]">
+                    <template v-if="periodo.estado === 'pendiente' && seleccionado.estado !== 'cierre' && edicionPeriodos[periodo.id]">
                       <td class="px-3 py-3 border-b border-slate-200">
                         <input v-model.trim="edicionPeriodos[periodo.id].nombre" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
                         <span v-if="erroresPeriodos[periodo.id]?.nombre" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre }}</span>
                       </td>
-                      <td class="px-3 py-3 border-b border-slate-200">
-                        <input v-model="edicionPeriodos[periodo.id].fecha_inicio" type="date" :class="entradaInput" />
-                        <span v-if="erroresPeriodos[periodo.id]?.fecha_inicio" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].fecha_inicio }}</span>
-                      </td>
-                      <td class="px-3 py-3 border-b border-slate-200">
-                        <input v-model="edicionPeriodos[periodo.id].fecha_fin" type="date" :class="entradaInput" />
-                        <span v-if="erroresPeriodos[periodo.id]?.fecha_fin" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].fecha_fin }}</span>
-                      </td>
                     </template>
                     <template v-else>
                       <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nombre }}</td>
-                      <td class="px-3 py-3 border-b border-slate-200">{{ fecha(periodo.fecha_inicio) }}</td>
-                      <td class="px-3 py-3 border-b border-slate-200">{{ fecha(periodo.fecha_fin) }}</td>
                     </template>
 
                     <td class="px-3 py-3 border-b border-slate-200">
@@ -468,7 +426,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
 
                     <td class="px-3 py-3 border-b border-slate-200">
                       <div class="flex flex-wrap gap-2">
-                        <template v-if="periodo.estado === 'pendiente' && seleccionado.estado !== 'cerrado'">
+                        <template v-if="periodo.estado === 'pendiente' && seleccionado.estado !== 'cierre'">
                           <button :disabled="ocupado" @click="guardarPeriodo(periodo)"
                             :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                             <i class="pi pi-save"></i> Guardar
@@ -477,7 +435,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                             :class="[botonBase, 'border-green-600 text-green-700 hover:bg-green-600 hover:text-white']">
                             <i class="pi pi-lock-open"></i> Abrir
                           </button>
-                          <button v-if="periodo.numero === ultimoNumero" :disabled="ocupado" @click="eliminarPeriodo(periodo)"
+                          <button v-if="periodo.nivel === ultimoNivel" :disabled="ocupado" @click="eliminarPeriodo(periodo)"
                             :class="[botonBase, 'border-red-500 text-red-600 hover:bg-red-500 hover:text-white']">
                             <i class="pi pi-trash"></i>
                           </button>
@@ -498,30 +456,10 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             </div>
 
             <p class="text-xs text-slate-500 mt-3">
-              Las fechas de un periodo deben quedar dentro del año lectivo y en orden. Un periodo solo se abre con el año activo
-              y cuando no hay otro periodo abierto.
+              Un periodo solo se abre con el año activo y cuando no hay otro periodo abierto.
             </p>
           </div>
 
-          <!-- Historial -->
-          <div class="bg-white rounded-3xl shadow-xl p-6">
-            <h3 class="text-xl font-semibold text-slate-800 mb-4">Historial</h3>
-            <p v-if="errorHistorial" class="text-red-600 text-sm">{{ errorHistorial }}</p>
-            <p v-else-if="!historial.length" class="text-slate-500 text-sm">Sin cambios de estado registrados.</p>
-            <ul v-else class="space-y-3">
-              <li v-for="registro in historial" :key="registro.id" class="border-l-4 border-blue-200 pl-3">
-                <p class="text-sm text-slate-800">
-                  <strong>{{ ACCIONES[registro.accion] ?? registro.accion }}</strong>
-                  {{ registro.entidad === "anio_lectivo" ? "del año lectivo" : `de ${seleccionado.periodos?.find((p) => p.id === registro.entidad_id)?.nombre ?? "un periodo"}` }}
-                  <span v-if="registro.estado_anterior || registro.estado_nuevo" class="text-slate-500">
-                    ({{ registro.estado_anterior ?? "—" }} → {{ registro.estado_nuevo ?? "—" }})
-                  </span>
-                </p>
-                <p v-if="registro.motivo" class="text-sm text-slate-600">Motivo: {{ registro.motivo }}</p>
-                <p class="text-xs text-slate-500">{{ registro.usuario?.nombre || registro.usuario?.email || "Usuario no disponible" }} · {{ fechaHora(registro.created_at) }}</p>
-              </li>
-            </ul>
-          </div>
         </section>
       </div>
 

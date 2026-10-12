@@ -21,11 +21,6 @@ export const anioLectivoService = {
         return response.data.anio_lectivo;
     },
 
-    async historial(id) {
-        const response = await api.get(`/anios-lectivos/${id}/historial`);
-        return response.data.historial;
-    },
-
     async diagnostico() {
         const response = await api.get('/anios-lectivos/diagnostico');
         return response.data.diagnostico;
@@ -58,7 +53,7 @@ export const anioLectivoService = {
         return response.data;
     },
 
-    // { nombre?, fecha_inicio?, fecha_fin? }
+    // { nombre? }
     async agregarPeriodo(id, datos = {}) {
         const response = await api.post(`/anios-lectivos/${id}/periodos`, datos);
         return response.data;
@@ -66,7 +61,7 @@ export const anioLectivoService = {
 };
 
 export const periodoEscolarService = {
-    // { nombre, fecha_inicio, fecha_fin }
+    // { nombre }
     async actualizar(id, datos) {
         const response = await api.put(`/periodos-escolares/${id}`, datos);
         return response.data;
@@ -82,7 +77,7 @@ export const periodoEscolarService = {
         return response.data;
     },
 
-    // El motivo es obligatorio (mín. 10 caracteres) y queda en el historial
+    // El motivo es obligatorio (mín. 10 caracteres) y queda en el registro del sistema
     async reabrir(id, motivo) {
         const response = await api.post(`/periodos-escolares/${id}/reabrir`, { motivo });
         return response.data;

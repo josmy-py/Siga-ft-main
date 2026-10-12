@@ -314,7 +314,7 @@ onMounted(async () => {
                   </svg>
 
                   <div class="absolute inset-0 flex items-center justify-center">
-                    <span class="text-xl font-bold text-blue-900">{{ periodoAbierto ? `P${periodoAbierto.numero}` : "—" }}</span>
+                    <span class="text-xl font-bold text-blue-900">{{ periodoAbierto ? `P${periodoAbierto.nivel}` : "—" }}</span>
                   </div>
                 </div>
 

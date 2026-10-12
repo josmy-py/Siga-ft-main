@@ -97,7 +97,7 @@ const claseCampo = (campo, bloqueado = false) => [
                 v-model="formData.nombre"
                 type="text"
                 required
-                maxlength="50"
+                maxlength="80"
                 placeholder="Nombre del profesor"
                 :class="claseCampo('nombre')"
               />
