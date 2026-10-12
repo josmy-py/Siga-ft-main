@@ -1,43 +1,89 @@
 <script setup>
-import { computed, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
+import Swal from "sweetalert2";
 import FormProfesores from "../Forms/Profesores.vue";
+import { profesorService } from "@/services/profesorService";
+import { usuarioService } from "@/services/usuarioService";
+import { mensajeError } from "@/services/api";
+import { ESTADO_ETIQUETAS } from "@/constants/roles";
 
 const activeSection = ref("Profesores");
 const search = ref("");
 
 const mostrarModal = ref(false);
+const profesorEditado = ref(null);
+
+const profesores = ref([]);
+const cargando = ref(false);
+const errorCarga = ref(null);
+
+const cargarProfesores = async () => {
+  cargando.value = true;
+  errorCarga.value = null;
+  try {
+    profesores.value = await profesorService.listar(search.value.trim());
+  } catch (error) {
+    errorCarga.value = mensajeError(error, "No se pudieron cargar los profesores");
+  } finally {
+    cargando.value = false;
+  }
+};
+
+// Búsqueda por nombre, código o DUI en el backend
+let temporizador = null;
+watch(search, () => {
+  clearTimeout(temporizador);
+  temporizador = setTimeout(cargarProfesores, 350);
+});
+
+onMounted(cargarProfesores);
+
+const abrirCrear = () => {
+  profesorEditado.value = null;
+  mostrarModal.value = true;
+};
+
+const abrirEditar = (profesor) => {
+  profesorEditado.value = profesor;
+  mostrarModal.value = true;
+};
 
 const cerrarModal = () => {
   mostrarModal.value = false;
+  profesorEditado.value = null;
 };
 
-const profesor = ref([
-  {
-    usuario: "Luis Miguel",
-    codigo: "PROF-001",
-    fecha_nacimiento: "1990-05-12",
-    telefono: "7777-1111",
-    direccion: "San Salvador",
-  },
-  {
-    usuario: "Marta Franco ",
-    codigo: "PROF-002",
-    fecha_nacimiento: "1988-08-20",
-    telefono: "7777-2222",
-    direccion: "Santa Tecla",
-  },
-  {
-    usuario: "Anguel Francisco",
-    codigo: "PROF-003",
-    fecha_nacimiento: "1992-11-30",
-    telefono: "7777-3333",
-    direccion: "Soyapango",
-  },
-]);
+const alGuardar = async (mensaje) => {
+  cerrarModal();
+  await cargarProfesores();
+  Swal.fire({ icon: "success", title: mensaje, timer: 3000, showConfirmButton: false });
+};
 
-const filteredProfesores = computed(() =>
-  profesor.value.filter((p) => p.codigo.toLowerCase().includes(search.value.toLowerCase())),
-);
+const ejecutar = async (accion, porDefecto) => {
+  try {
+    const { message } = await accion();
+    await cargarProfesores();
+    Swal.fire({ icon: "success", title: message, timer: 2500, showConfirmButton: false });
+  } catch (error) {
+    Swal.fire({ icon: "error", title: mensajeError(error, porDefecto) });
+  }
+};
+
+const reenviarEnlace = (profesor) =>
+  ejecutar(() => usuarioService.reenviarEnlace(profesor.user_id), "No se pudo reenviar el enlace");
+
+const eliminar = async (profesor) => {
+  const { isConfirmed } = await Swal.fire({
+    icon: "warning",
+    title: "¿Eliminar al profesor?",
+    text: `Se eliminará ${profesor.codigo} y su cuenta. Solo es posible si no tiene secciones ni asignaciones.`,
+    showCancelButton: true,
+    confirmButtonText: "Sí, eliminar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+  await ejecutar(() => profesorService.eliminar(profesor.id), "No se pudo eliminar el profesor");
+};
 
 const tabClass = (name) => [
   "px-8 py-2 rounded-t-[24px] border border-transparent font-semibold text-lg transition-all duration-200",
@@ -70,85 +116,93 @@ const tabClass = (name) => [
             <input
               v-model="search"
               type="text"
-              placeholder="Buscar profesor..."
+              placeholder="Buscar por nombre, código o DUI..."
               class="w-full max-w-sm h-11 px-4 border border-slate-300 rounded-lg outline-none focus:border-blue-500"
             />
 
             <button
-              @click="mostrarModal = true"
+              @click="abrirCrear"
               class="ml-auto h-11 px-5 rounded-lg bg-blue-600 border border-transparent text-white font-semibold hover:bg-blue-700 transition"
             >
               + Agregar
             </button>
           </div>
 
+          <div v-if="errorCarga" class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+            {{ errorCarga }}
+          </div>
+
           <div class="overflow-x-auto">
-            <table class="w-full min-w-[1000px] border-collapse">
+            <table class="w-full min-w-[1100px] border-collapse">
               <thead>
                 <tr>
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
-                    Usuario
-                  </th>
-
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
-                    Código
-                  </th>
-
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
-                    Fecha de Nacimiento
-                  </th>
-
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
-                    Teléfono
-                  </th>
-
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
-                    Dirección
-                  </th>
-
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
-                    Acciones
-                  </th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Código</th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Nombre</th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">DUI</th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Especialidad</th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Teléfono</th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Contratación</th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Cuenta</th>
+                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Acciones</th>
                 </tr>
               </thead>
 
               <tbody>
+                <tr v-if="cargando && !profesores.length">
+                  <td colspan="8" class="text-center py-6 text-slate-500">Cargando profesores...</td>
+                </tr>
+
+                <tr v-else-if="!profesores.length">
+                  <td colspan="8" class="text-center py-6 text-slate-500">No se encontraron profesores.</td>
+                </tr>
+
                 <tr
-                  v-for="profesor in filteredProfesores"
-                  :key="profesor.id_usuario"
+                  v-for="profesor in profesores"
+                  :key="profesor.id"
                   class="hover:bg-slate-50"
                 >
-                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">
-                    {{ profesor.usuario }}
+                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700 font-medium whitespace-nowrap">{{ profesor.codigo }}</td>
+                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.nombre }}</td>
+                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.dui }}</td>
+                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.especialidad || "(sin dato)" }}</td>
+                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.telefono }}</td>
+                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.fecha_contratacion || "(sin dato)" }}</td>
+                  <td class="px-4 py-4 border-b border-slate-200">
+                    <span
+                      class="px-3 py-1 rounded-full text-sm font-medium"
+                      :class="{
+                        'bg-green-100 text-green-700': profesor.user?.estado === 'activo',
+                        'bg-amber-100 text-amber-700': profesor.user?.estado === 'pendiente',
+                        'bg-slate-200 text-slate-600': profesor.user?.estado === 'inactivo',
+                      }"
+                    >
+                      {{ ESTADO_ETIQUETAS[profesor.user?.estado] ?? profesor.user?.estado }}
+                    </span>
                   </td>
 
-                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700 font-medium">
-                    {{ profesor.codigo }}
-                  </td>
-
-                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">
-                    {{ profesor.fecha_nacimiento }}
-                  </td>
-
-                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">
-                    {{ profesor.telefono }}
-                  </td>
-
-                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">
-                    {{ profesor.direccion }}
-                  </td>
-
-                  <td class="px-6 py-4">
-                    <div class="flex justify-center gap-3">
+                  <td class="px-6 py-4 border-b border-slate-200">
+                    <div class="flex justify-center flex-wrap gap-2">
                       <button
-                        class="flex items-center gap-2 px-4 py-2 rounded-xl border border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white transition"
+                        @click="abrirEditar(profesor)"
+                        class="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white transition"
                       >
                         <i class="pi pi-pencil"></i>
                         Editar
                       </button>
 
                       <button
-                        class="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500 text-red-600 hover:bg-red-500 hover:text-white transition"
+                        v-if="profesor.user?.estado === 'pendiente'"
+                        @click="reenviarEnlace(profesor)"
+                        class="flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500 text-amber-600 hover:bg-amber-500 hover:text-white transition"
+                        title="Reenviar el enlace para definir la contraseña"
+                      >
+                        <i class="pi pi-envelope"></i>
+                        Reenviar enlace
+                      </button>
+
+                      <button
+                        @click="eliminar(profesor)"
+                        class="flex items-center gap-2 px-3 py-2 rounded-xl border border-red-500 text-red-600 hover:bg-red-500 hover:text-white transition"
                       >
                         <i class="pi pi-trash"></i>
                         Eliminar
@@ -156,17 +210,11 @@ const tabClass = (name) => [
                     </div>
                   </td>
                 </tr>
-
-                <tr v-if="filteredProfesores.length === 0">
-                  <td colspan="6" class="text-center py-6 text-slate-500">
-                    No se encontraron profesores.
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
 
-          <FormProfesores v-if="mostrarModal" @cerrar="cerrarModal" />
+          <FormProfesores v-if="mostrarModal" :profesor="profesorEditado" @cerrar="cerrarModal" @guardado="alGuardar" />
         </section>
       </div>
     </main>
