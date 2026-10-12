@@ -114,6 +114,13 @@ const handleNavClick = () => {
           Constancias
         </router-link>
 
+        <router-link to="/Admin/anios-lectivos" class="menu-item" @click="handleNavClick">
+          <div class="bg-white drop-shadow p-2 rounded-full">
+            <i class="pi pi-calendar text-blue-500"></i>
+          </div>
+          Años lectivos
+        </router-link>
+
         <router-link to="/Admin/catalogos" class="menu-item" @click="handleNavClick">
           <div class="bg-white drop-shadow p-2 rounded-full">
             <i class="pi pi-th-large text-blue-500"></i>

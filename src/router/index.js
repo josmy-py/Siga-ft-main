@@ -267,6 +267,12 @@ const router = createRouter({
         },
 
         {
+          path: "anios-lectivos",
+          name: "anios-lectivos-admin",
+          component: () => import("../modules/Admin/AniosLectivos.vue"),
+        },
+
+        {
           path: "catalogos",
           name: "catalogos-admin",
           component: () => import("../modules/Admin/GestionAdmin.vue"),

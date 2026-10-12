@@ -1,7 +1,27 @@
 <script setup>
-import { ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { anioLectivoService } from "@/services/calendarioService";
+import { mensajeError } from "@/services/api";
 
 const adminName = ref("Ing. Juan Pérez");
+
+// Año lectivo activo y periodo abierto (M2.2), desde la API
+const calendario = ref(null);
+const cargandoCalendario = ref(true);
+const errorCalendario = ref(null);
+
+const anioActivo = computed(() => calendario.value?.anio_lectivo ?? null);
+const periodoAbierto = computed(() => calendario.value?.periodo_abierto ?? null);
+
+onMounted(async () => {
+  try {
+    calendario.value = await anioLectivoService.actual();
+  } catch (error) {
+    errorCalendario.value = mensajeError(error, "No se pudo obtener el año lectivo actual");
+  } finally {
+    cargandoCalendario.value = false;
+  }
+});
 </script>
 
 <template>
@@ -83,9 +103,26 @@ const adminName = ref("Ing. Juan Pérez");
           <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
             <div class="flex justify-between items-center">
               <div>
-                <p class="text-gray-500 text-sm">Período Actual</p>
-                <h2 class="text-2xl font-bold mt-2">Trimestre 1</h2>
-                <p class="text-purple-600 text-sm mt-2">En curso</p>
+                <p class="text-gray-500 text-sm">Año lectivo y periodo</p>
+                <template v-if="cargandoCalendario">
+                  <h2 class="text-2xl font-bold mt-2 text-gray-400">Cargando...</h2>
+                </template>
+                <template v-else-if="errorCalendario">
+                  <p class="text-red-600 text-sm mt-2">{{ errorCalendario }}</p>
+                </template>
+                <template v-else-if="!anioActivo">
+                  <h2 class="text-2xl font-bold mt-2 text-gray-400">Sin año activo</h2>
+                  <router-link to="/Admin/anios-lectivos" class="text-purple-600 text-sm mt-2 inline-block underline">
+                    No hay un año lectivo activo. Configúrelo aquí.
+                  </router-link>
+                </template>
+                <template v-else>
+                  <h2 class="text-2xl font-bold mt-2">Año {{ anioActivo.nombre }}</h2>
+                  <p v-if="periodoAbierto" class="text-purple-600 text-sm mt-2">{{ periodoAbierto.nombre }} abierto</p>
+                  <router-link v-else to="/Admin/anios-lectivos" class="text-amber-600 text-sm mt-2 inline-block underline">
+                    Ningún periodo abierto
+                  </router-link>
+                </template>
               </div>
 
               <div class="w-14 h-14 rounded-xl bg-purple-100 flex items-center justify-center">
@@ -277,7 +314,7 @@ const adminName = ref("Ing. Juan Pérez");
                   </svg>
 
                   <div class="absolute inset-0 flex items-center justify-center">
-                    <span class="text-xl font-bold text-blue-900">T1</span>
+                    <span class="text-xl font-bold text-blue-900">{{ periodoAbierto ? `P${periodoAbierto.numero}` : "—" }}</span>
                   </div>
                 </div>
 
