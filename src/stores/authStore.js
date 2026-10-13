@@ -22,6 +22,8 @@ export const useAuthStore = defineStore('auth', {
       return this.tokenVigente && !!this.user
     },
     rol: (state) => state.user?.rol ?? null,
+    // Solo el director modifica catálogos y cuentas; el backend lo vuelve a exigir
+    esDirector: (state) => state.user?.rol === 'DIRECTOR',
     etiquetaRol: (state) => etiquetaRol(state.user?.rol),
     rutaInicio: (state) => ({ name: RUTA_INICIO_POR_ROL[state.user?.rol] ?? 'login' }),
   },

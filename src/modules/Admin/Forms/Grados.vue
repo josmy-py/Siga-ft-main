@@ -1,8 +1,15 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import Swal from "sweetalert2";
 import { gradoService } from "@/services/catalogoService";
+import { erroresCampos, mensajeError } from "@/services/api";
 
-const emit = defineEmits(["save"]);
+const props = defineProps({
+  // Grado a editar; sin él el formulario registra uno nuevo
+  grado: { type: Object, default: null },
+});
+
+const emit = defineEmits(["guardado", "cancelar"]);
 
 // El diagrama solo tiene "nombre". El nombre se elige del catálogo oficial de
 // grados y cada uno tiene su orden fijo para la promoción (lo da la API).
@@ -10,33 +17,58 @@ const Grados = ref({
   nombre: ""
 });
 
+const editando = computed(() => !!props.grado);
 const catalogo = ref([]);
-onMounted(async () => {
+const errores = ref({});
+const errorGeneral = ref(null);
+const guardando = ref(false);
+
+const registrados = computed(() => catalogo.value.filter((g) => g.grado_id !== null).length);
+// Al editar, el nombre actual del grado sigue disponible
+const ocupado = (g) => g.grado_id !== null && g.grado_id !== props.grado?.id;
+
+const cargarCatalogo = async () => {
   try {
     catalogo.value = await gradoService.catalogo();
-  } catch {
+  } catch (error) {
     catalogo.value = [];
+    errorGeneral.value = mensajeError(error, "No se pudo cargar el catálogo oficial de grados");
   }
-});
+};
+
+onMounted(cargarCatalogo);
+defineExpose({ cargarCatalogo });
 
 const limpiar = () => {
   Grados.value = {
-    nombre: ""
+    nombre: props.grado?.nombre ?? ""
   };
+  errores.value = {};
+  errorGeneral.value = null;
 };
 
-const guardarGrado = () => {
-  if (!Grados.value.nombre) {
-    alert("Por favor completa los campos requeridos");
-    return;
+watch(() => props.grado, limpiar, { immediate: true });
+
+const guardarGrado = async () => {
+  errores.value = {};
+  errorGeneral.value = null;
+  guardando.value = true;
+  try {
+    const { message } = editando.value
+      ? await gradoService.update(props.grado.id, { ...Grados.value })
+      : await gradoService.create({ ...Grados.value });
+    Swal.fire({ icon: "success", title: message, timer: 2500, showConfirmButton: false });
+    Grados.value = { nombre: "" };
+    await cargarCatalogo();
+    emit("guardado");
+  } catch (error) {
+    errores.value = erroresCampos(error);
+    if (!Object.keys(errores.value).length) {
+      errorGeneral.value = mensajeError(error, "No se pudo guardar el grado");
+    }
+  } finally {
+    guardando.value = false;
   }
-
-  console.log("Grado registrado:", Grados.value);
-  alert("Grado registrado correctamente");
-
-  emit("save", { ...Grados.value });
-
-  limpiar();
 };
 </script>
 
@@ -52,16 +84,20 @@ const guardarGrado = () => {
 
         <div>
           <h2 class="text-2xl font-bold text-white">
-            Nuevo Grado
+            {{ editando ? "Editar Grado" : "Nuevo Grado" }}
           </h2>
           <p class="text-blue-100">
-            Gestión de grados académicos
+            {{ editando ? `Modificando: ${grado.nombre}` : `${registrados} de ${catalogo.length} grados oficiales registrados` }}
           </p>
         </div>
 
       </div>
 
       <form @submit.prevent="guardarGrado" class="p-8">
+
+        <div v-if="errorGeneral" class="mb-5 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+          {{ errorGeneral }}
+        </div>
 
         <div class="space-y-2">
 
@@ -75,22 +111,28 @@ const guardarGrado = () => {
 
             <select
               v-model="Grados.nombre"
-              class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-300 focus:border-transparent outline-none transition bg-white"
+              required
+              :class="errores.nombre ? 'border-red-400' : 'border-gray-200'"
+              class="w-full pl-12 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-gray-300 focus:border-transparent outline-none transition bg-white"
             >
               <option value="" disabled>Selecciona un grado</option>
               <option
                 v-for="g in catalogo"
                 :key="g.nombre"
                 :value="g.nombre"
-                :disabled="g.grado_id !== null"
+                :disabled="ocupado(g)"
               >
-                {{ g.nombre }}{{ g.grado_id !== null ? " (ya registrado)" : "" }}
+                {{ g.nombre }}{{ ocupado(g) ? " (ya registrado)" : "" }}
               </option>
             </select>
 
           </div>
 
-          <p class="text-xs text-gray-500">
+          <p v-if="errores.nombre" class="text-red-600 text-xs">{{ errores.nombre }}</p>
+          <p v-else-if="editando" class="text-xs text-amber-600">
+            El nombre define el orden de promoción: solo se puede cambiar si el grado aún no tiene secciones ni planes de estudio.
+          </p>
+          <p v-else class="text-xs text-gray-500">
             Solo se admiten los grados oficiales; así se sabe a qué grado pasa el estudiante que aprueba.
           </p>
 
@@ -100,6 +142,16 @@ const guardarGrado = () => {
         <div class="flex justify-end gap-3 mt-8">
 
           <button
+            v-if="editando"
+            type="button"
+            @click="emit('cancelar')"
+            class="px-5 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-100 transition"
+          >
+            Cancelar edición
+          </button>
+
+          <button
+            v-else
             type="button"
             @click="limpiar"
             class="px-5 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-100 transition"
@@ -110,10 +162,11 @@ const guardarGrado = () => {
 
           <button
             type="submit"
-            class="px-6 py-3 rounded-xl bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 shadow-md transition flex items-center gap-2"
+            :disabled="guardando"
+            class="px-6 py-3 rounded-xl bg-blue-600 border border-blue-600 text-white hover:bg-blue-700 shadow-md transition flex items-center gap-2 disabled:opacity-60"
           >
             <i class="pi pi-check"></i>
-            Guardar Grado
+            {{ guardando ? "Guardando..." : editando ? "Guardar cambios" : "Guardar Grado" }}
           </button>
 
         </div>

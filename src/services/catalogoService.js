@@ -4,7 +4,7 @@ import baseService from './baseService';
 // Catálogos de M2.1. Lectura para cualquier cuenta con sesión; crear, editar y
 // eliminar solo para DIRECTOR (la API responde 403 a los demás, 409 si el
 // registro está en uso y 422 con `errors` por campo si la validación falla).
-// Aún no hay pantallas conectadas: los formularios deben migrar a este servicio.
+// Pantallas en Catálogos (M2.5).
 // Grados: el nombre debe ser uno del catálogo oficial (la API devuelve su orden académico)
 export const gradoService = {
     ...baseService('/grados'),          // { nombre }
@@ -15,9 +15,9 @@ export const gradoService = {
         return response.data.catalogo;
     }
 };
-export const especialidadService = baseService('/especialidades');  // { nombre } (máx. 20)
-export const discapacidadService = baseService('/discapacidades');  // { nombre }
-export const enfermedadService = baseService('/enfermedades');      // { nombre, medicamento }
+export const especialidadService = baseService('/especialidades');  // { nombre } (máx. 50)
+export const discapacidadService = baseService('/discapacidades');  // { nombre } (máx. 50)
+export const enfermedadService = baseService('/enfermedades');      // { nombre, medicamento } (máx. 50 cada uno)
 
 // Plan de estudios y asignaturas (M2.3). Cada plan pertenece a un grado y sus
 // asignaturas forman el pensum de ese grado; solo un plan vigente (estado true)

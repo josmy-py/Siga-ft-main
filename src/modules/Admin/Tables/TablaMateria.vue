@@ -1,13 +1,63 @@
 <script setup>
-import { ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import Swal from "sweetalert2";
+import { asignaturaService } from "@/services/catalogoService";
+import { mensajeError } from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
 
-const Materias = ref([
-  { nombre: "Matemáticas" },
-  { nombre: "Ciencias" },
-  { nombre: "Historia" },
-  { nombre: "Lenguaje" },
-  { nombre: "Arte" }
-]);
+// M2.5 (D-C1): materias del plan de estudios abierto
+const props = defineProps({
+  plan: { type: Object, required: true },
+});
+
+const emit = defineEmits(["editar", "cambio"]);
+const auth = useAuthStore();
+
+const Materias = ref([]);
+const busqueda = ref("");
+const cargando = ref(false);
+const errorCarga = ref(null);
+
+const filtradas = computed(() => {
+  const texto = busqueda.value.trim().toLowerCase();
+  return texto ? Materias.value.filter((m) => m.nombre.toLowerCase().includes(texto)) : Materias.value;
+});
+
+const cargar = async () => {
+  cargando.value = true;
+  errorCarga.value = null;
+  try {
+    Materias.value = await asignaturaService.delPlan(props.plan.id);
+  } catch (error) {
+    errorCarga.value = mensajeError(error, "No se pudieron cargar las materias del plan");
+  } finally {
+    cargando.value = false;
+  }
+};
+
+onMounted(cargar);
+watch(() => props.plan.id, cargar);
+defineExpose({ cargar });
+
+const eliminar = async (materia) => {
+  const { isConfirmed } = await Swal.fire({
+    icon: "warning",
+    title: "¿Eliminar la materia?",
+    text: `Se eliminará "${materia.nombre}" del plan. Solo es posible si no tiene docentes asignados.`,
+    showCancelButton: true,
+    confirmButtonText: "Sí, eliminar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+  try {
+    const { message } = await asignaturaService.delete(materia.id);
+    await cargar();
+    emit("cambio");
+    Swal.fire({ icon: "success", title: message, timer: 2000, showConfirmButton: false });
+  } catch (error) {
+    Swal.fire({ icon: "error", title: mensajeError(error, "No se pudo eliminar la materia") });
+  }
+};
 </script>
 
 <template>
@@ -19,10 +69,11 @@ const Materias = ref([
 
         <div>
           <h2 class="text-2xl font-bold text-gray-800">
-            Materias Registradas
+            Materias de {{ plan.nombre }}
           </h2>
           <p class="text-gray-500 text-sm mt-1">
-            Gestiona las materias del sistema académico.
+            {{ plan.grado?.nombre ?? "Sin grado" }}{{ plan.especialidad ? ` · ${plan.especialidad.nombre}` : "" }} ·
+            {{ plan.estado ? "plan vigente: estas materias se podrán asignar a las secciones del grado" : "plan no vigente" }}
           </p>
         </div>
 
@@ -36,6 +87,7 @@ const Materias = ref([
             <i class="pi pi-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
 
             <input
+              v-model="busqueda"
               type="text"
               placeholder="Buscar materia..."
               class="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition"
@@ -57,7 +109,7 @@ const Materias = ref([
                 Nombre
               </th>
 
-              <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">
+              <th v-if="auth.esDirector" class="px-6 py-4 text-center text-sm font-semibold text-gray-700">
                 Acciones
               </th>
             </tr>
@@ -65,9 +117,21 @@ const Materias = ref([
 
           <tbody>
 
+            <tr v-if="errorCarga">
+              <td colspan="2" class="px-6 py-4 text-red-700 bg-red-50 text-sm">{{ errorCarga }}</td>
+            </tr>
+            <tr v-else-if="cargando && !Materias.length">
+              <td colspan="2" class="text-center py-6 text-slate-500">Cargando materias...</td>
+            </tr>
+            <tr v-else-if="!filtradas.length">
+              <td colspan="2" class="text-center py-6 text-slate-500">
+                {{ busqueda ? "Ninguna materia coincide con la búsqueda." : "Este plan aún no tiene materias." }}
+              </td>
+            </tr>
+
             <tr
-              v-for="(materia, index) in Materias"
-              :key="index"
+              v-for="materia in filtradas"
+              :key="materia.id"
               class="border-t hover:bg-slate-50 transition"
             >
 
@@ -85,17 +149,19 @@ const Materias = ref([
                 </div>
               </td>
 
-              <td class="px-6 py-4">
+              <td v-if="auth.esDirector" class="px-6 py-4">
                 <div class="flex justify-center gap-3">
 
                   <button
+                    @click="emit('editar', materia)"
                     class="flex items-center gap-2 px-4 py-2 rounded-xl border border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white transition"
                   >
                     <i class="pi pi-pencil"></i>
-                    Editar
+                    Renombrar
                   </button>
 
                   <button
+                    @click="eliminar(materia)"
                     class="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500 text-red-600 hover:bg-red-500 hover:text-white transition"
                   >
                     <i class="pi pi-trash"></i>

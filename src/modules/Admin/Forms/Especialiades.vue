@@ -1,31 +1,51 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
+import Swal from "sweetalert2";
+import { especialidadService } from "@/services/catalogoService";
+import { erroresCampos, mensajeError } from "@/services/api";
 
-const emit = defineEmits(["save"]);
-
-const Especialidades = ref({
-  nombre: ""
+const props = defineProps({
+  // Especialidad a editar; sin ella el formulario registra una nueva
+  especialidad: { type: Object, default: null },
 });
 
+const emit = defineEmits(["guardado", "cancelar"]);
+
+const editando = computed(() => !!props.especialidad);
+const Especialidades = ref({ nombre: "" });
+const errores = ref({});
+const errorGeneral = ref(null);
+const guardando = ref(false);
+
 const limpiar = () => {
-  Especialidades.value = {
-    nombre: ""
-  };
+  Especialidades.value = { nombre: props.especialidad?.nombre ?? "" };
+  errores.value = {};
+  errorGeneral.value = null;
 };
 
-const guardarEspecialidad = () => {
-  if (!Especialidades.value.nombre) {
-    alert("Por favor completa los campos requeridos");
-    return;
+watch(() => props.especialidad, limpiar, { immediate: true });
+
+const guardarEspecialidad = async () => {
+  errores.value = {};
+  errorGeneral.value = null;
+  guardando.value = true;
+  try {
+    const datos = { nombre: Especialidades.value.nombre.trim() };
+    const { message } = editando.value
+      ? await especialidadService.update(props.especialidad.id, datos)
+      : await especialidadService.create(datos);
+    Swal.fire({ icon: "success", title: message, timer: 2500, showConfirmButton: false });
+    Especialidades.value = { nombre: "" };
+    emit("guardado");
+  } catch (error) {
+    errores.value = erroresCampos(error);
+    if (!Object.keys(errores.value).length) {
+      errorGeneral.value = mensajeError(error, "No se pudo guardar la especialidad");
+    }
+  } finally {
+    guardando.value = false;
   }
-  console.log("Especialidad registrada:", Especialidades.value);
-  alert("Especialidad registrada correctamente");
-  emit("save", { ...Especialidades.value });
-  Especialidades.value = {
-    nombre: ""
-  };
 };
-
 </script>
 <template>
 <div class="w-full p-4 md:p-6">
@@ -43,11 +63,11 @@ const guardarEspecialidad = () => {
 
           <div>
             <h2 class="text-2xl font-bold text-white">
-              Nueva Especialidad
+              {{ editando ? "Editar Especialidad" : "Nueva Especialidad" }}
             </h2>
 
             <p class="text-blue-100">
-              Registra una nueva especialidad académica
+              {{ editando ? `Modificando: ${especialidad.nombre}` : "Registra una nueva especialidad académica" }}
             </p>
           </div>
 
@@ -59,6 +79,10 @@ const guardarEspecialidad = () => {
         @submit.prevent="guardarEspecialidad"
         class="p-8"
       >
+
+        <div v-if="errorGeneral" class="mb-5 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+          {{ errorGeneral }}
+        </div>
 
         <div class="space-y-2">
 
@@ -77,14 +101,18 @@ const guardarEspecialidad = () => {
             <input
               v-model="Especialidades.nombre"
               type="text"
-              placeholder="Ej: Educación Media"
-              class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-300 focus:border-transparent outline-none transition"
+              required
+              maxlength="50"
+              placeholder="Ej: Bachillerato General"
+              class="w-full pl-12 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-gray-300 focus:border-transparent outline-none transition"
+              :class="errores.nombre ? 'border-red-400' : 'border-gray-200'"
             />
 
           </div>
 
-          <p class="text-xs text-gray-500">
-            Ingresa el nombre de la especialidad que ofrecerá la institución.
+          <p v-if="errores.nombre" class="text-red-600 text-xs">{{ errores.nombre }}</p>
+          <p v-else class="text-xs text-gray-500">
+            Ingresa el nombre de la especialidad que ofrecerá la institución (máximo 50 caracteres).
           </p>
 
         </div>
@@ -92,6 +120,16 @@ const guardarEspecialidad = () => {
         <div class="flex justify-end gap-3 mt-8">
 
           <button
+            v-if="editando"
+            type="button"
+            @click="emit('cancelar')"
+            class="px-5 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-100 transition"
+          >
+            Cancelar edición
+          </button>
+
+          <button
+            v-else
             type="button"
             @click="limpiar"
             class="px-5 py-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-100 transition"
@@ -102,10 +140,11 @@ const guardarEspecialidad = () => {
 
           <button
             type="submit"
-            class="px-6 py-3 rounded-xl bg-blue-600 text-white border border-transparent hover:bg-blue-700 shadow-md transition flex items-center gap-2"
+            :disabled="guardando"
+            class="px-6 py-3 rounded-xl bg-blue-600 text-white border border-transparent hover:bg-blue-700 shadow-md transition flex items-center gap-2 disabled:opacity-60"
           >
             <i class="pi pi-check"></i>
-            Guardar Especialidad
+            {{ guardando ? "Guardando..." : editando ? "Guardar cambios" : "Guardar Especialidad" }}
           </button>
 
         </div>
