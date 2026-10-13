@@ -1,165 +1,145 @@
 <script setup>
-import { ref, computed } from "vue";
+import { computed, onMounted, ref } from "vue";
+import Swal from "sweetalert2";
+import api, { erroresCampos, mensajeError } from "../../services/api";
+import { estudianteService } from "../../services/estudianteService";
+import { familiaService } from "../../services/familiaService";
 
-const emit = defineEmits(["cerrar", "save"]);
-
-const listaDepartamentos = ref([
-  { id: 1, nombre: "Chalatenango" },
-  { id: 2, nombre: "San Salvador" }
-]);
-
-const listaMunicipios = ref({
-  1: [
-    { id: 101, nombre: "Chalatenango Sur" },
-    { id: 102, nombre: "Chalatenango Norte" },
-    { id: 103, nombre: "Chalatenango Centro" }
-  ],
-  2: [
-    { id: 201, nombre: "San Salvador Centro" },
-    { id: 202, nombre: "San Salvador Oeste" }
-  ]
+// M5: registro y edición del estudiante con la API real. Los padres se eligen de
+// la familia de la cuenta; para agregar uno nuevo se usa la pantalla "Padres".
+const props = defineProps({
+  estudianteId: { type: Number, default: null },
+  // Dirección: edita solo los datos del estudiante; la familia se gestiona en la ficha
+  sinPadres: { type: Boolean, default: false },
 });
-
-const listaDistritos = ref({
-  102: [
-    { id: 1001, nombre: "Citalá" },
-    { id: 1002, nombre: "La Palma" },
-    { id: 1003, nombre: "San Ignacio" }
-  ],
-  101: [
-    { id: 1004, nombre: "Arcatao" },
-    { id: 1005, nombre: "San José Las Flores" }
-  ]
-});
+const emit = defineEmits(["cerrar", "guardado"]);
 
 const estudiante = ref({
-  nombres: "",
+  nombre: "",
   nie: "",
-  departamento_id: null,
-  municipio_id: null,
+  fecha_nacimiento: "",
+  genero: "",
   distrito_id: null,
   canton: "",
-  telefono: "",
-  correo: "",
   direccion: "",
-  genero: ""
 });
+const permisos = ref({ editar_nie: true });
+const vinculados = ref([]);
+const errores = ref({});
+const cargando = ref(true);
+const guardando = ref(false);
 
-const todosLosDistritos = computed(() => {
-  const distritosPlanos = [];
-  for (const idMunicipio in listaDistritos.value) {
-    listaDistritos.value[idMunicipio].forEach(distrito => {
-      distritosPlanos.push({
-        ...distrito,
-        municipioPadreId: parseInt(idMunicipio)
-      });
-    });
-  }
-  return distritosPlanos.sort((a, b) => a.nombre.localeCompare(b.nombre));
-});
-
-const alCambiarDistrito = () => {
-  const idDistritoSeleccionado = estudiante.value.distrito_id;
-  
-  if (!idDistritoSeleccionado) {
-    estudiante.value.municipio_id = null;
-    estudiante.value.departamento_id = null;
-    return;
-  }
-
-  const distritoEncontrado = todosLosDistritos.value.find(d => d.id === idDistritoSeleccionado);
-  
-  if (distritoEncontrado) {
-    estudiante.value.municipio_id = distritoEncontrado.municipioPadreId;
-
-    for (const idDepto in listaMunicipios.value) {
-      const perteneceAlDepto = listaMunicipios.value[idDepto].some(
-        m => m.id === distritoEncontrado.municipioPadreId
-      );
-      
-      if (perteneceAlDepto) {
-        estudiante.value.departamento_id = parseInt(idDepto);
-        break;
-      }
-    }
-  }
-};
-
-// --- NUEVAS VARIABLES Y FUNCIONES PARA EL BUSCADOR DE DISTRITOS ---
+// --- Distrito: buscador sobre el catálogo real (M2.1) ---
+const todosLosDistritos = ref([]);
 const busquedaDistrito = ref("");
 const mostrarDropdownDistrito = ref(false);
+const distritoSeleccionado = computed(() => todosLosDistritos.value.find((d) => d.id === estudiante.value.distrito_id));
 
 const distritosFiltrados = computed(() => {
-  if (!busquedaDistrito.value) return todosLosDistritos.value;
   const busqueda = busquedaDistrito.value.toLowerCase();
-  return todosLosDistritos.value.filter(d => 
-    d.nombre.toLowerCase().includes(busqueda)
-  );
+  const lista = !busqueda
+    ? todosLosDistritos.value
+    : todosLosDistritos.value.filter(
+        (d) => d.nombre.toLowerCase().includes(busqueda) || d.municipio?.nombre.toLowerCase().includes(busqueda)
+      );
+  return lista.slice(0, 50);
 });
 
 const seleccionarDistrito = (distrito) => {
   estudiante.value.distrito_id = distrito.id;
-  busquedaDistrito.value = distrito.nombre; // Ponemos el nombre en el input
-  mostrarDropdownDistrito.value = false; // Ocultamos la lista
-  alCambiarDistrito(); // Llenamos Municipio y Depto automáticamente
+  busquedaDistrito.value = distrito.nombre;
+  mostrarDropdownDistrito.value = false;
 };
 
 const verificarInputDistrito = () => {
-  if (busquedaDistrito.value === "") {
-    estudiante.value.distrito_id = null;
-    alCambiarDistrito();
-  }
+  if (busquedaDistrito.value === "") estudiante.value.distrito_id = null;
 };
-// -----------------------------------------------------------------
 
+const ocultarDropdown = () => setTimeout(() => (mostrarDropdownDistrito.value = false), 200);
+
+// --- Padres de la familia ---
+const padresFamilia = ref([]);
 const padreDesconocido = ref(false);
 const madreDesconocida = ref(false);
+const padreId = ref(null);
+const madreId = ref(null);
 
-const padre = ref({
-  nombre: "",
-  telefono: "",
-  dui: "",
-  correo: ""
-});
+const cargar = async () => {
+  cargando.value = true;
+  try {
+    const [{ data }, padres] = await Promise.all([api.get("/distritos"), props.sinPadres ? [] : familiaService.padres()]);
+    todosLosDistritos.value = data.distritos;
+    padresFamilia.value = padres;
 
-const madre = ref({
-  nombre: "",
-  telefono: "",
-  dui: "",
-  correo: ""
-});
-
-const guardarEstudiante = () => {
-  if (
-    !estudiante.value.nombres ||
-    !estudiante.value.nie ||
-    !estudiante.value.genero ||
-    !estudiante.value.distrito_id
-  ) {
-    alert("Complete todos los campos obligatorios del estudiante.");
-    return;
+    if (props.estudianteId) {
+      const ficha = await estudianteService.obtener(props.estudianteId);
+      const e = ficha.estudiante;
+      estudiante.value = {
+        nombre: e.nombre,
+        nie: e.nie ?? "",
+        fecha_nacimiento: e.fecha_nacimiento?.slice(0, 10) ?? "",
+        genero: e.genero,
+        distrito_id: e.distrito_id,
+        canton: e.canton ?? "",
+        direccion: e.direccion,
+      };
+      busquedaDistrito.value = e.distrito?.nombre ?? "";
+      permisos.value = ficha.permisos;
+      vinculados.value = e.padres;
+    }
+  } catch (e) {
+    Swal.fire({ icon: "error", title: mensajeError(e, "No se pudieron cargar los datos del formulario") });
+  } finally {
+    cargando.value = false;
   }
-
-  // Payload estructurado en snake_case para Laravel
-  const payload = {
-    ...estudiante.value,
-    padre: padreDesconocido.value ? null : { ...padre.value },
-    madre: madreDesconocida.value ? null : { ...madre.value },
-    padre_desconocido: padreDesconocido.value,
-    madre_desconocida: madreDesconocida.value
-  };
-
-  emit("save", payload);
 };
 
-const cancelar = () => {
-  emit("cerrar");
+onMounted(cargar);
+
+const guardarEstudiante = async () => {
+  errores.value = {};
+  guardando.value = true;
+  const datos = { ...estudiante.value, nie: estudiante.value.nie.trim() || null, canton: estudiante.value.canton || null };
+  try {
+    if (props.estudianteId) {
+      const { message } = await estudianteService.actualizar(props.estudianteId, datos);
+      emit("guardado", message);
+      return;
+    }
+
+    const { message, estudiante: creado } = await estudianteService.crear(datos);
+    const pendientes = [];
+    for (const [id, parentesco, omitir] of [[padreId.value, "Padre", padreDesconocido.value], [madreId.value, "Madre", madreDesconocida.value]]) {
+      if (!id || omitir) continue;
+      try {
+        await familiaService.vincularPorId(creado.id, id, parentesco);
+      } catch (e) {
+        pendientes.push(`${parentesco}: ${Object.values(erroresCampos(e))[0] ?? mensajeError(e, "no se pudo vincular")}`);
+      }
+    }
+    if (pendientes.length) {
+      await Swal.fire({ icon: "warning", title: "Estudiante registrado", text: `Revise en "Padres": ${pendientes.join(" ")}` });
+    }
+    emit("guardado", message);
+  } catch (e) {
+    errores.value = erroresCampos(e);
+    if (!Object.keys(errores.value).length) {
+      Swal.fire({ icon: e.response?.status === 409 ? "warning" : "error", title: mensajeError(e, "No se pudo guardar el estudiante") });
+    }
+  } finally {
+    guardando.value = false;
+  }
 };
+
+const cancelar = () => emit("cerrar");
 </script>
 
 <template>
   <div class="w-full">
-    <form @submit.prevent="guardarEstudiante" class="space-y-6">
+    <p v-if="cargando" class="text-center text-gray-500 py-6">
+      <i class="pi pi-spin pi-spinner mr-2"></i>Cargando...
+    </p>
+    <form v-else @submit.prevent="guardarEstudiante" class="space-y-6">
 
       <!-- Nombre completo -->
       <div>
@@ -167,11 +147,46 @@ const cancelar = () => {
           Nombre completo
         </label>
         <input
-          v-model="estudiante.nombres"
+          v-model="estudiante.nombre"
           type="text"
+          maxlength="80"
           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
           placeholder="Ingrese el nombre completo"
         />
+        <p v-if="errores.nombre" class="text-xs text-red-600 mt-1">{{ errores.nombre }}</p>
+      </div>
+
+      <!-- NIE y fecha de nacimiento -->
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            NIE <span class="text-gray-400 font-normal">(opcional si aún no lo tiene)</span>
+          </label>
+          <input
+            v-model="estudiante.nie"
+            type="text"
+            inputmode="numeric"
+            maxlength="10"
+            :disabled="!permisos.editar_nie"
+            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-500"
+            placeholder="Solo números"
+          />
+          <p v-if="!permisos.editar_nie" class="text-xs text-gray-500 mt-1">
+            Con la matrícula aprobada, solo la dirección puede cambiar el NIE.
+          </p>
+          <p v-if="errores.nie" class="text-xs text-red-600 mt-1">{{ errores.nie }}</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Fecha de nacimiento
+          </label>
+          <input
+            v-model="estudiante.fecha_nacimiento"
+            type="date"
+            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+          <p v-if="errores.fecha_nacimiento" class="text-xs text-red-600 mt-1">{{ errores.fecha_nacimiento }}</p>
+        </div>
       </div>
 
       <!-- Género -->
@@ -181,23 +196,16 @@ const cancelar = () => {
         </label>
         <div class="flex gap-8">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              value="M"
-              v-model="estudiante.genero"
-            />
+            <input type="radio" value="Masculino" v-model="estudiante.genero" />
             Masculino
           </label>
 
           <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              value="F"
-              v-model="estudiante.genero"
-            />
+            <input type="radio" value="Femenino" v-model="estudiante.genero" />
             Femenino
           </label>
         </div>
+        <p v-if="errores.genero" class="text-xs text-red-600 mt-1">{{ errores.genero }}</p>
       </div>
 
       <!-- Lugar de nacimiento (Distrito primero) -->
@@ -206,8 +214,8 @@ const cancelar = () => {
           Lugar de nacimiento
         </h3>
         <div class="grid md:grid-cols-3 gap-4">
-          
-          <!-- 1. Distrito (Buscador Inteligente) -->
+
+          <!-- 1. Distrito (Buscador) -->
           <div class="relative">
             <label class="block text-sm text-gray-600 mb-1">
               Distrito
@@ -217,15 +225,14 @@ const cancelar = () => {
                 type="text"
                 v-model="busquedaDistrito"
                 @focus="mostrarDropdownDistrito = true"
-                @blur="setTimeout(() => mostrarDropdownDistrito = false, 200)"
+                @blur="ocultarDropdown"
                 @input="verificarInputDistrito"
                 placeholder="Buscar distrito..."
                 class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none pr-10"
               />
               <i class="pi pi-search absolute right-3 top-3 text-gray-400"></i>
             </div>
-            
-            <!-- Lista desplegable flotante -->
+
             <ul
               v-if="mostrarDropdownDistrito"
               class="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto"
@@ -233,56 +240,43 @@ const cancelar = () => {
               <li
                 v-for="distrito in distritosFiltrados"
                 :key="distrito.id"
-                @click="seleccionarDistrito(distrito)"
+                @mousedown.prevent="seleccionarDistrito(distrito)"
                 class="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 transition"
               >
-                {{ distrito.nombre }}
+                {{ distrito.nombre }} <span class="text-gray-400">· {{ distrito.municipio?.nombre }}</span>
               </li>
-              
+
               <li v-if="distritosFiltrados.length === 0" class="px-4 py-3 text-sm text-gray-500 text-center">
                 No se encontraron resultados
               </li>
             </ul>
+            <p v-if="errores.distrito_id" class="text-xs text-red-600 mt-1">{{ errores.distrito_id }}</p>
           </div>
 
-          <!-- 2. Municipio (Read-only / Autocompletado) -->
+          <!-- 2. Municipio (autocompletado) -->
           <div>
             <label class="block text-sm text-gray-600 mb-1">
               Municipio
             </label>
-            <select
-              v-model="estudiante.municipio_id"
+            <input
+              :value="distritoSeleccionado?.municipio?.nombre ?? ''"
               disabled
+              placeholder="Seleccione un distrito"
               class="w-full px-4 py-2 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none"
-            >
-              <option :value="null">Seleccione...</option>
-              <optgroup v-for="(municipios, idDepto) in listaMunicipios" :key="idDepto">
-                <option v-for="municipio in municipios" :key="municipio.id" :value="municipio.id">
-                  {{ municipio.nombre }}
-                </option>
-              </optgroup>
-            </select>
+            />
           </div>
 
-          <!-- 3. Departamento (Read-only / Autocompletado) -->
+          <!-- 3. Departamento (autocompletado) -->
           <div>
             <label class="block text-sm text-gray-600 mb-1">
               Departamento
             </label>
-            <select
-              v-model="estudiante.departamento_id"
+            <input
+              :value="distritoSeleccionado?.municipio?.departamento?.nombre ?? ''"
               disabled
+              placeholder="Seleccione un distrito"
               class="w-full px-4 py-2 border rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed outline-none"
-            >
-              <option :value="null">Seleccione...</option>
-              <option
-                v-for="departamento in listaDepartamentos"
-                :key="departamento.id"
-                :value="departamento.id"
-              >
-                {{ departamento.nombre }}
-              </option>
-            </select>
+            />
           </div>
 
         </div>
@@ -296,6 +290,7 @@ const cancelar = () => {
         <textarea
           v-model="estudiante.canton"
           rows="2"
+          maxlength="50"
           class="w-full px-4 py-2 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 outline-none"
           placeholder="Escriba el cantón o caserío correspondiente..."
         />
@@ -309,102 +304,93 @@ const cancelar = () => {
         <textarea
           v-model="estudiante.direccion"
           rows="3"
+          maxlength="100"
           class="w-full px-4 py-2 border rounded-lg resize-none"
           placeholder="Ingrese la dirección completa"
         />
-      </div>
-
-      <!-- Teléfono y Correo -->
-      <div class="grid md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">
-            Teléfono
-          </label>
-          <input
-            v-model="estudiante.telefono"
-            type="text"
-            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="Teléfono"
-          />
-        </div>
-
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">
-            Correo electrónico
-          </label>
-          <input
-            v-model="estudiante.correo"
-            type="email"
-            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="ejemplo@correo.com"
-          />
-        </div>
+        <p v-if="errores.direccion" class="text-xs text-red-600 mt-1">{{ errores.direccion }}</p>
       </div>
 
       <!-- Información de los padres -->
-      <div class="border-t pt-6 mt-6">
+      <div v-if="!sinPadres" class="border-t pt-6 mt-6">
         <h3 class="text-sm font-semibold text-gray-700 mb-4 flex justify-between items-center">
           Información de los padres
+          <router-link :to="{ name: 'registro-padres' }" class="text-xs text-blue-600 hover:underline font-normal">
+            Registrar padres en "Padres"
+          </router-link>
         </h3>
 
-        <!-- Padre -->
-        <div class="border rounded-xl p-5 mb-4 bg-gray-50/50">
-          <div class="flex items-center gap-2 mb-4">
-            <input
-              type="checkbox"
-              id="padreDesconocido"
-              v-model="padreDesconocido"
-              class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-            />
-            <label for="padreDesconocido" class="text-sm font-bold text-gray-700 cursor-pointer">
-              Padre desconocido
-            </label>
-          </div>
-
-          <div v-if="!padreDesconocido" class="animate-fade-in">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar Padre
-            </label>
-            <select
-              v-model="estudiante.padre_id"
-              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
-            >
-              <option :value="null">Seleccione un padre de la lista...</option>
-              <!-- Idealmente esto vendrá de tu Pinia Store -->
-              <option value="1">Juan Méndez (12345678-9)</option>
-              <option value="2">Carlos Ruiz (98765432-1)</option>
-            </select>
-          </div>
+        <!-- Edición: padres ya vinculados -->
+        <div v-if="estudianteId" class="border rounded-xl p-5 bg-gray-50/50 text-sm">
+          <p v-if="!vinculados.length" class="text-gray-500">Aún no tiene padres vinculados.</p>
+          <p v-for="p in vinculados" :key="p.id" class="text-gray-700">
+            <span class="font-semibold">{{ p.pivot.parentesco }}:</span> {{ p.nombre }} ({{ p.dui }})
+          </p>
+          <router-link
+            :to="{ name: 'registro-padres', query: { estudiante: estudianteId } }"
+            class="inline-block mt-3 text-blue-600 hover:underline"
+          >
+            Gestionar padres de este estudiante
+          </router-link>
         </div>
 
-        <!-- Madre -->
-        <div class="border rounded-xl p-5 bg-gray-50/50">
-          <div class="flex items-center gap-2 mb-4">
-            <input
-              type="checkbox"
-              id="madreDesconocida"
-              v-model="madreDesconocida"
-              class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-            />
-            <label for="madreDesconocida" class="text-sm font-bold text-gray-700 cursor-pointer">
-              Madre desconocida
-            </label>
+        <template v-else>
+          <!-- Padre -->
+          <div class="border rounded-xl p-5 mb-4 bg-gray-50/50">
+            <div class="flex items-center gap-2 mb-4">
+              <input
+                type="checkbox"
+                id="padreDesconocido"
+                v-model="padreDesconocido"
+                class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              />
+              <label for="padreDesconocido" class="text-sm font-bold text-gray-700 cursor-pointer">
+                Padre desconocido o se registrará después
+              </label>
+            </div>
+
+            <div v-if="!padreDesconocido" class="animate-fade-in">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Seleccionar Padre
+              </label>
+              <select
+                v-model="padreId"
+                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
+              >
+                <option :value="null">Seleccione un padre de la lista...</option>
+                <option v-for="p in padresFamilia" :key="p.id" :value="p.id">{{ p.nombre }} ({{ p.dui }})</option>
+              </select>
+            </div>
           </div>
 
-          <div v-if="!madreDesconocida" class="animate-fade-in">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar Madre
-            </label>
-            <select
-              v-model="estudiante.madre_id"
-              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
-            >
-              <option :value="null">Seleccione una madre de la lista...</option>
-              <option value="3">Ana Méndez (11223344-5)</option>
-              <option value="4">Elena Torres (55667788-9)</option>
-            </select>
+          <!-- Madre -->
+          <div class="border rounded-xl p-5 bg-gray-50/50">
+            <div class="flex items-center gap-2 mb-4">
+              <input
+                type="checkbox"
+                id="madreDesconocida"
+                v-model="madreDesconocida"
+                class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              />
+              <label for="madreDesconocida" class="text-sm font-bold text-gray-700 cursor-pointer">
+                Madre desconocida o se registrará después
+              </label>
+            </div>
+
+            <div v-if="!madreDesconocida" class="animate-fade-in">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Seleccionar Madre
+              </label>
+              <select
+                v-model="madreId"
+                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
+              >
+                <option :value="null">Seleccione una madre de la lista...</option>
+                <option v-for="p in padresFamilia" :key="p.id" :value="p.id">{{ p.nombre }} ({{ p.dui }})</option>
+              </select>
+            </div>
           </div>
-        </div>
+        </template>
       </div>
 
       <!-- Botones de acción -->
@@ -419,9 +405,10 @@ const cancelar = () => {
 
         <button
           type="submit"
-          class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          :disabled="guardando"
+          class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
         >
-          Guardar estudiante
+          {{ guardando ? "Guardando..." : "Guardar estudiante" }}
         </button>
       </div>
     </form>
