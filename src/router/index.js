@@ -10,6 +10,7 @@ import ClienteLayout from "../layouts/ClienteLayout.vue";
 // Vistas principales
 import Login from "../views/Login.vue";
 import Register from "../views/Register.vue";
+import HomeView from "@/views/HomeView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -21,7 +22,13 @@ const router = createRouter({
 
     {
       path: "/",
-      redirect: { name: "login" },
+      redirect: { name: "home" },
+    },
+
+    {
+      path: "/homeview",
+      name: "home",
+      component: HomeView,
     },
 
     {

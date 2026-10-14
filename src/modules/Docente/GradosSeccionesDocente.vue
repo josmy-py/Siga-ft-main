@@ -38,13 +38,6 @@ onMounted(cargar);
 <template>
   <div class="relative min-h-screen bg-gray-50 md:flex">
     <main class="flex-1 transition-all duration-300">
-      <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div class="px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 class="text-xl font-bold text-gray-800">Grados y Secciones</h1>
-          </div>
-        </div>
-      </header>
 
       <div class="p-6 lg:p-8">
         <section class="mb-6">

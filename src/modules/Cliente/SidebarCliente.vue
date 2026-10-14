@@ -138,34 +138,6 @@ const menuItems = computed(() => {
           </div>
         </div>
       </nav>
-
-      <!-- Footer -->
-      <div
-        class="mt-auto p-4 border-t border-gray-200 flex items-center justify-between bg-gray-50/50 shrink-0"
-      >
-        <div class="flex items-center gap-3 overflow-hidden">
-          <div
-            class="w-10 h-10 rounded-full bg-[#1e3a8a] text-white flex items-center justify-center font-bold text-sm shadow-sm select-none shrink-0"
-          >
-            {{ inicial }}
-          </div>
-
-          <div class="overflow-hidden">
-            <p class="text-xs font-bold text-gray-900 truncate">{{ nombreUsuario }}</p>
-
-            <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{{ authStore.etiquetaRol }}</p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          class="w-9 h-9 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-red-500 hover:bg-red-50 transition-colors shrink-0"
-          title="Cerrar Sesión"
-          @click="cerrarSesion"
-        >
-          <i class="pi pi-sign-out text-sm"></i>
-        </button>
-      </div>
     </aside>
   </div>
 </template>

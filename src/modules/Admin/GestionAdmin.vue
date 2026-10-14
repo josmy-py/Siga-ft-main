@@ -24,13 +24,6 @@ const catalogos = ref("");
 <template>
   <div class="relative min-h-screen bg-gray-50 md:flex">
     <main class="flex-1 min-w-0 transition-all duration-300">
-      <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div class="px-6 py-2 flex items-center justify-between">
-          <div>
-            <h1 class="text-xl font-bold text-gray-800">Catálogos</h1>
-          </div>
-        </div>
-      </header>
 
       <div class="p-4">
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-3 mb-5">

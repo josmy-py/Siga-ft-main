@@ -82,13 +82,7 @@ const getConductaClass = (valoracion) =>
 <template>
   <div class="min-h-screen bg-gray-50">
     <main class="transition-all duration-300 flex flex-col">
-      <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div class="px-6 py-4 flex items-center justify-between">
-          <div class="flex items-center gap-4">
-            <h1 class="text-xl font-bold text-gray-800">Libreta de Notas</h1>
-          </div>
-        </div>
-      </header>
+      
 
       <!-- CONTENIDO PRINCIPAL -->
       <div class="p-6 lg:p-8 flex-1">

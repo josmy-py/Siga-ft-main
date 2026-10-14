@@ -39,13 +39,7 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen bg-gray-50">
-    <header class="bg-white shadow-sm border-b border-gray-200">
-      <div class="px-6 py-4">
-        <h1 class="text-2xl font-bold text-gray-800">Inicio</h1>
-        <p class="text-gray-500 text-sm">{{ aviso }}</p>
-      </div>
-    </header>
-
+    
     <div class="p-6 space-y-6">
       <div v-if="estado !== 'aprobada'" class="flex flex-wrap gap-3">
         <button class="px-4 py-2 rounded-lg border hover:bg-gray-100" @click="router.push({ name: 'registro-cliente' })">

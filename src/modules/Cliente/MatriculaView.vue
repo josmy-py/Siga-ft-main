@@ -239,13 +239,6 @@ const claseCampo = (campo) =>
 
     <!-- Paso 2: ficha de matrícula -->
     <form v-else class="space-y-6" novalidate @submit.prevent="enviar">
-      <header class="bg-white rounded-2xl shadow-sm p-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 class="text-3xl font-bold text-gray-800">Ficha de Matrícula</h1>
-        <div class="flex items-center gap-3">
-          <span class="px-4 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wide">{{ etiquetaTipo }}</span>
-          <button type="button" class="text-sm text-gray-500 underline" @click="tipo = ''">Cambiar tipo</button>
-        </div>
-      </header>
 
       <div v-if="cargando" class="text-gray-500 px-2">Cargando…</div>
 

@@ -115,14 +115,6 @@ const handleNavClick = () => {
           Catalogos
         </router-link>
       </nav>
-
-      <!-- Footer -->
-      <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
-        <button type="button" class="menu-item w-full border-0 bg-transparent cursor-pointer text-red-400 hover:bg-red-50" @click="cerrarSesion">
-          <i class="pi pi-sign-out"></i>
-          Cerrar Sesión
-        </button>
-      </div>
     </aside>
   </div>
 </template>

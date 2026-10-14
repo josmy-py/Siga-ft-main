@@ -104,13 +104,6 @@ const irPadres = () => router.push({ name: "registro-padres" });
 <template>
   <div class="min-h-screen bg-gray-50">
     <main class="transition-all duration-300">
-      <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div class="px-6 py-4 flex items-center justify-between">
-          <div class="flex items-center gap-4">
-            <h1 class="text-xl font-bold text-gray-800">Mi Perfil</h1>
-          </div>
-        </div>
-      </header>
 
       <div class="bg-gray-100 p-6 rounded-2xl">
         <div v-if="cargando" class="p-10 text-center text-gray-500">
