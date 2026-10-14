@@ -102,7 +102,7 @@ const isOpen = ref(false);
           class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md hover:bg-blue-700 hover:scale-105 transition flex items-center gap-2"
         >
           <i class="pi pi-user-plus"></i>
-          Pre-matrícula
+          Registro
         </router-link>
 
         <router-link

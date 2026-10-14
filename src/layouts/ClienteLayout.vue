@@ -63,11 +63,5 @@ watch(
         <RouterView />
       </main>
     </div>
-
-    <div
-      v-if="sidebarOpen"
-      class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-20 md:hidden transition-all"
-      @click="closeSidebar"
-    ></div>
   </div>
 </template>

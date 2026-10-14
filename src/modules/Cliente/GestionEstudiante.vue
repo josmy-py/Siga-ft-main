@@ -57,12 +57,6 @@ const cancelar = async (m) => {
 <template>
   <div class="relative min-h-screen bg-gray-100 md:flex">
     <main class="flex-1 transition-all duration-300">
-      <div class="mb-8 bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div class="px-6 py-4">
-          <h1 class="text-3xl font-bold text-gray-800">Solicitud de Matrícula</h1>
-          <p class="text-gray-500 text-sm">Consulte el estado de sus solicitudes. La sección la asigna la dirección.</p>
-        </div>
-      </div>
 
       <div class="p-6">
         <div class="flex justify-end mb-6">
