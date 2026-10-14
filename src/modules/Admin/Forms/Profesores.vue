@@ -21,8 +21,7 @@ const formData = ref({
   fecha_nacimiento: props.profesor?.fecha_nacimiento ?? "",
   telefono: props.profesor?.telefono ?? "",
   direccion: props.profesor?.direccion ?? "",
-  especialidad: props.profesor?.especialidad ?? "",
-  fecha_contratacion: props.profesor?.fecha_contratacion ?? "",
+  password: "",
 });
 
 const errores = ref({});
@@ -40,10 +39,10 @@ const guardarProfesor = async () => {
 
   guardando.value = true;
   try {
-    const { dui, email, ...datos } = formData.value;
+    const { dui, email, password, ...datos } = formData.value;
     const respuesta = editando.value
       ? await profesorService.actualizar(props.profesor.id, datos)
-      : await profesorService.crear({ ...datos, email, dui: normalizarDui(dui) });
+      : await profesorService.crear({ ...datos, email, dui: normalizarDui(dui), ...(password ? { password } : {}) });
 
     emit("guardado", respuesta.message);
   } catch (error) {
@@ -52,6 +51,7 @@ const guardarProfesor = async () => {
       errorGeneral.value = mensajeError(error, "No se pudo guardar el profesor");
     }
   } finally {
+    formData.value.password = "";
     guardando.value = false;
   }
 };
@@ -161,29 +161,17 @@ const claseCampo = (campo, bloqueado = false) => [
               <p v-if="errores.fecha_nacimiento" class="text-red-600 text-xs mt-1">{{ errores.fecha_nacimiento }}</p>
             </div>
 
-            <div>
-              <label class="block text-sm font-medium mb-2">Especialidad</label>
+            <div v-if="!editando">
+              <label class="block text-sm font-medium mb-2">Contraseña de la cuenta</label>
               <input
-                v-model="formData.especialidad"
-                type="text"
-                required
-                maxlength="50"
-                placeholder="Ej. Matemática"
-                :class="claseCampo('especialidad')"
+                v-model="formData.password"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Mínimo 8 caracteres, letras y números"
+                :class="claseCampo('password')"
               />
-              <p v-if="errores.especialidad" class="text-red-600 text-xs mt-1">{{ errores.especialidad }}</p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium mb-2">Fecha de contratación</label>
-              <input
-                v-model="formData.fecha_contratacion"
-                type="date"
-                required
-                :max="hoy"
-                :class="claseCampo('fecha_contratacion')"
-              />
-              <p v-if="errores.fecha_contratacion" class="text-red-600 text-xs mt-1">{{ errores.fecha_contratacion }}</p>
+              <p v-if="errores.password" class="text-red-600 text-xs mt-1">{{ errores.password }}</p>
+              <p v-else class="text-slate-500 text-xs mt-1">Déjela vacía si el correo ya tiene una cuenta DOCENTE.</p>
             </div>
           </div>
 
@@ -201,8 +189,8 @@ const claseCampo = (campo, bloqueado = false) => [
           </div>
 
           <p v-if="!editando" class="text-sm text-slate-500">
-            El código (PROF-001, PROF-002...) se asigna automáticamente. Se creará la cuenta del docente
-            y recibirá un enlace en su correo para definir su contraseña.
+            El código (PROF-001, PROF-002...) se asigna automáticamente. Si el correo no tiene cuenta, se crea
+            la cuenta DOCENTE con la contraseña indicada.
           </p>
 
           <div class="flex justify-end gap-3 pt-4 border-t">

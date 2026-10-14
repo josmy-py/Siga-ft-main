@@ -1,22 +1,19 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useAuthStore } from "@/stores/authStore";
+import { useEstadoMatricula } from "@/composables/useEstadoMatricula";
 
 const props = defineProps({
   open: {
     type: Boolean,
     default: false,
   },
-  matriculaEstado: {
-    type: String,
-    default: "aprobada",
-  },
 });
 
 const emit = defineEmits(["close"]);
 
 const authStore = useAuthStore();
-const nombreUsuario = computed(() => authStore.user?.nombre || authStore.user?.email || "");
+const nombreUsuario = computed(() => authStore.user?.email || "");
 const inicial = computed(() => nombreUsuario.value.charAt(0).toUpperCase());
 
 const cerrarSesion = () => {
@@ -44,86 +41,29 @@ const toggleSubmenu = (titulo) => {
   submenuAbierto.value = submenuAbierto.value === titulo ? null : titulo;
 };
 
-/*
- * Estructura del menú.
- * Puedes agregar submenu igual que en el Sidebar de React.
- */
+// El menú sigue el estado de la matrícula de la cuenta (lo actualiza la guarda del router):
+// mientras está pendiente (o aún no hay solicitud): Inicio, Registro de Estudiante, Registro
+// de Padres, Solicitud de Matrícula y Mi Perfil; aprobada: Inicio, Mi Perfil, Libreta de Notas y Asignaturas.
+const { estado } = useEstadoMatricula();
+
+const MENU_SOLICITUD = [
+  { title: "Inicio", to: "/cliente/inicio", icon: "pi pi-home" },
+  { title: "Registro de Estudiante", to: "/cliente/registro", icon: "pi pi-user-plus" },
+  { title: "Registro de Padres", to: "/cliente/padres", icon: "pi pi-users" },
+  { title: "Solicitud de Matrícula", to: "/cliente/matricula", icon: "pi pi-file-plus" },
+  { title: "Mi Perfil", to: "/cliente/perfil", icon: "pi pi-user" },
+];
+
+const MENU_APROBADA = [
+  { title: "Inicio", to: "/cliente/inicio", icon: "pi pi-home" },
+  { title: "Mi Perfil", to: "/cliente/perfil", icon: "pi pi-user" },
+  { title: "Libreta de Notas", to: "/cliente/boleta", icon: "pi pi-file-edit" },
+  { title: "Asignaturas", to: "/cliente/asignaturas", icon: "pi pi-check-circle" },
+];
+
 const menuItems = computed(() => {
-  const items = [
-    {
-      title: "Inicio",
-      to: "/cliente/dashboard",
-      icon: "pi pi-home",
-    },
-  ];
-
-  if (props.matriculaEstado === "pendiente") {
-    items.push({
-      title: "Registro de Estudiante",
-      to: "/cliente/registro",
-      icon: "pi pi-user-plus",
-    });
-
-    items.push({
-      title: "Registro de Padres",
-      to: "/cliente/padres",
-      icon: "pi pi-users",
-    });
-
-    items.push({
-      title: "Solicitud de Matrícula",
-      to: "/cliente/matricula",
-      icon: "pi pi-file-plus",
-    });
-
-    items.push({
-      title: "Avisos",
-      to: "/cliente/avisos",
-      icon: "pi pi-book",
-    });
-  }
-
-  if (props.matriculaEstado === "aprobada") {
-    items.push({
-      title: "Mi Perfil",
-      to: "/cliente/perfil",
-      icon: "pi pi-user",
-    });
-
-    items.push({
-      title: "Libreta de Notas",
-      to: "/cliente/boleta",
-      icon: "pi pi-file-edit",
-    });
-
-    items.push({
-      title: "Asignaturas",
-      to: "/cliente/asignaturas",
-      icon: "pi pi-check-circle",
-    });
-
-    items.push({
-      title: "Avisos",
-      to: "/cliente/avisos",
-      icon: "pi pi-book",
-    });
-  }
-
-  if (props.matriculaEstado === "rechazada") {
-    items.push({
-      title: "Registro de Estudiante",
-      to: "/cliente/registro",
-      icon: "pi pi-user-plus",
-    });
-
-    items.push({
-      title: "Avisos",
-      to: "/cliente/avisos",
-      icon: "pi pi-book",
-    });
-  }
-
-  return items;
+  if (!estado.value) return [];
+  return estado.value === "aprobada" ? MENU_APROBADA : MENU_SOLICITUD;
 });
 </script>
 

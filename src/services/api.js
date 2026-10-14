@@ -14,9 +14,6 @@ const SIN_RENOVACION = [
   '/auth/register',
   '/auth/refresh',
   '/auth/logout',
-  '/auth/reenviar-activacion',
-  '/auth/olvide-contrasena',
-  '/auth/restablecer-contrasena',
 ]
 
 const RENOVAR_ANTES_MS = 5 * 60 * 1000
@@ -105,13 +102,7 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    // 403 por cuenta desactivada o pendiente: la sesión ya no es válida.
-    // Cualquier otro 403 es falta de permiso y nunca dispara una renovación.
-    const codigo = response.data?.codigo
-    if (response.status === 403 && auth.token && (codigo === 'cuenta_inactiva' || codigo === 'cuenta_pendiente')) {
-      auth.logout({ llamarApi: false, motivo: codigo })
-    }
-
+    // Un 403 es falta de permiso y nunca dispara una renovación
     return Promise.reject(error)
   },
 )

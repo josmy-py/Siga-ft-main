@@ -139,7 +139,7 @@ const eliminar = async (est) => {
                 <tr v-for="est in cargando ? [] : estudiantes" :key="est.id" class="border-t hover:bg-gray-50">
                   <td class="p-3">{{ est.nombre }}</td>
                   <td class="p-3">{{ est.nie || "—" }}</td>
-                  <td class="p-3 text-sm">{{ est.user?.nombre || "—" }}</td>
+                  <td class="p-3 text-sm">{{ est.user?.email || "—" }}</td>
                   <td class="p-3">{{ etiquetaEstado[est.estado] ?? est.estado }}</td>
                   <td class="p-3">{{ est.ultima_matricula?.anio_lectivo?.nombre || "—" }}</td>
                   <td class="p-3">{{ est.ultima_matricula?.seccion?.grado?.nombre || "—" }}</td>

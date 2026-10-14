@@ -1,4 +1,5 @@
 <script setup>
+import ComprobanteMatricula from "../../components/ComprobanteMatricula.vue";
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
@@ -12,6 +13,7 @@ const router = useRouter();
 
 const cuenta = ref(null);
 const padre = ref(null);
+const comprobanteId = ref(null);
 const encargado = ref(null);
 const hijos = ref([]);
 const cargando = ref(true);
@@ -55,7 +57,7 @@ const editarPadre = () => {
 const abrirEncargado = () => {
   form.value = encargado.value
     ? { ...encargado.value }
-    : { nombre: cuenta.value?.nombre ?? "", dui: cuenta.value?.dui ?? "", parentesco: "", telefono: "", direccion: "" };
+    : { nombre: "", dui: "", parentesco: "", telefono: "", direccion: "" };
   errores.value = {};
   modal.value = "encargado";
 };
@@ -126,11 +128,9 @@ const irPadres = () => router.push({ name: "registro-padres" });
               <div>
                 <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
                   <i class="pi pi-user text-blue-600"></i>
-                  {{ cuenta?.nombre }}
+                  {{ cuenta?.email }}
                 </h1>
-                <p class="text-gray-500 text-sm mt-1">
-                  Cuenta de encargado · {{ cuenta?.email }} · DUI {{ cuenta?.dui || "sin registrar" }}
-                </p>
+                <p class="text-gray-500 text-sm mt-1">Cuenta de encargado</p>
               </div>
             </div>
           </div>
@@ -172,6 +172,9 @@ const irPadres = () => router.push({ name: "registro-padres" });
                     <span><b>Correo:</b> {{ padre.email || "—" }}</span>
                   </div>
                 </div>
+                <div v-else-if="encargado" class="text-sm text-gray-500">
+                  Su cuenta tiene perfil de encargado: ese perfil es el responsable de sus estudiantes.
+                </div>
                 <div v-else class="text-sm text-gray-500">
                   No está registrado como padre o madre. Si lo es, regístrese en
                   <button class="text-blue-600 underline" @click="irPadres">Padres</button>
@@ -192,6 +195,7 @@ const irPadres = () => router.push({ name: "registro-padres" });
                     </p>
                   </div>
                   <button
+                    v-if="!padre || encargado"
                     @click="abrirEncargado"
                     class="border border-gray-300 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-100 transition"
                   >
@@ -207,7 +211,12 @@ const irPadres = () => router.push({ name: "registro-padres" });
                   <span><b>Teléfono:</b> {{ encargado.telefono }}</span>
                   <span class="md:col-span-2"><b>Dirección:</b> {{ encargado.direccion }}</span>
                 </div>
-                <div v-else class="text-sm text-gray-500">Sin datos de encargado registrados.</div>
+                <div v-else-if="padre" class="text-sm text-gray-500">
+                  Usted está registrado como padre o madre: es el responsable de sus estudiantes y no se registra un encargado adicional.
+                </div>
+                <div v-else class="text-sm text-gray-500">
+                  Sin datos de encargado registrados. Si no es el padre ni la madre del estudiante, regístrelos: son obligatorios para matricular.
+                </div>
               </div>
             </div>
 
@@ -231,6 +240,13 @@ const irPadres = () => router.push({ name: "registro-padres" });
                     </template>
                     <template v-else>Sin matrícula</template>
                   </p>
+                  <button
+                    v-if="hijo.ultima_matricula"
+                    class="mt-2 text-sm text-blue-600 underline"
+                    @click="comprobanteId = hijo.ultima_matricula.id"
+                  >
+                    Comprobante de matrícula
+                  </button>
                 </div>
                 <p v-if="!hijos.length" class="text-sm text-gray-500">No hay estudiantes registrados.</p>
               </div>
@@ -239,6 +255,8 @@ const irPadres = () => router.push({ name: "registro-padres" });
         </template>
       </div>
     </main>
+
+    <ComprobanteMatricula v-if="comprobanteId" :matricula-id="comprobanteId" @cerrar="comprobanteId = null" />
 
     <!-- MODAL EDICIÓN -->
     <div v-if="modal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -254,7 +272,7 @@ const irPadres = () => router.push({ name: "registro-padres" });
         </div>
         <div>
           <label class="text-sm text-gray-600">DUI</label>
-          <input v-model="form.dui" class="w-full border p-2 rounded-lg bg-gray-100" disabled title="Es el DUI de su cuenta" />
+          <input v-model="form.dui" class="w-full border p-2 rounded-lg" placeholder="00000000-0" />
           <p v-if="errores.dui" class="text-xs text-red-600 mt-1">{{ errores.dui }}</p>
         </div>
         <div v-if="modal === 'encargado'">

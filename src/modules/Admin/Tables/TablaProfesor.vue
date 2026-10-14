@@ -3,9 +3,7 @@ import { onMounted, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import FormProfesores from "../Forms/Profesores.vue";
 import { profesorService } from "@/services/profesorService";
-import { usuarioService } from "@/services/usuarioService";
 import { mensajeError } from "@/services/api";
-import { ESTADO_ETIQUETAS } from "@/constants/roles";
 
 const activeSection = ref("Profesores");
 const search = ref("");
@@ -69,9 +67,6 @@ const ejecutar = async (accion, porDefecto) => {
   }
 };
 
-const reenviarEnlace = (profesor) =>
-  ejecutar(() => usuarioService.reenviarEnlace(profesor.user_id), "No se pudo reenviar el enlace");
-
 const eliminar = async (profesor) => {
   const { isConfirmed } = await Swal.fire({
     icon: "warning",
@@ -133,15 +128,13 @@ const tabClass = (name) => [
           </div>
 
           <div class="overflow-x-auto">
-            <table class="w-full min-w-[1100px] border-collapse">
+            <table class="w-full min-w-[900px] border-collapse">
               <thead>
                 <tr>
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Código</th>
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Nombre</th>
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">DUI</th>
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Especialidad</th>
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Teléfono</th>
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Contratación</th>
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Cuenta</th>
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Acciones</th>
                 </tr>
@@ -149,11 +142,11 @@ const tabClass = (name) => [
 
               <tbody>
                 <tr v-if="cargando && !profesores.length">
-                  <td colspan="8" class="text-center py-6 text-slate-500">Cargando profesores...</td>
+                  <td colspan="6" class="text-center py-6 text-slate-500">Cargando profesores...</td>
                 </tr>
 
                 <tr v-else-if="!profesores.length">
-                  <td colspan="8" class="text-center py-6 text-slate-500">No se encontraron profesores.</td>
+                  <td colspan="6" class="text-center py-6 text-slate-500">No se encontraron profesores.</td>
                 </tr>
 
                 <tr
@@ -164,22 +157,8 @@ const tabClass = (name) => [
                   <td class="px-4 py-4 border-b border-slate-200 text-slate-700 font-medium whitespace-nowrap">{{ profesor.codigo }}</td>
                   <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.nombre }}</td>
                   <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.dui }}</td>
-                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.especialidad || "(sin dato)" }}</td>
                   <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.telefono }}</td>
-                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.fecha_contratacion || "(sin dato)" }}</td>
-                  <td class="px-4 py-4 border-b border-slate-200">
-                    <span
-                      class="px-3 py-1 rounded-full text-sm font-medium"
-                      :class="{
-                        'bg-green-100 text-green-700': profesor.user?.estado === 'activo',
-                        'bg-amber-100 text-amber-700': profesor.user?.estado === 'pendiente',
-                        'bg-slate-200 text-slate-600': profesor.user?.estado === 'inactivo',
-                      }"
-                    >
-                      {{ ESTADO_ETIQUETAS[profesor.user?.estado] ?? profesor.user?.estado }}
-                    </span>
-                  </td>
-
+                  <td class="px-4 py-4 border-b border-slate-200 text-slate-700">{{ profesor.user?.email }}</td>
                   <td class="px-6 py-4 border-b border-slate-200">
                     <div class="flex justify-center flex-wrap gap-2">
                       <button
@@ -188,16 +167,6 @@ const tabClass = (name) => [
                       >
                         <i class="pi pi-pencil"></i>
                         Editar
-                      </button>
-
-                      <button
-                        v-if="profesor.user?.estado === 'pendiente'"
-                        @click="reenviarEnlace(profesor)"
-                        class="flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500 text-amber-600 hover:bg-amber-500 hover:text-white transition"
-                        title="Reenviar el enlace para definir la contraseña"
-                      >
-                        <i class="pi pi-envelope"></i>
-                        Reenviar enlace
                       </button>
 
                       <button

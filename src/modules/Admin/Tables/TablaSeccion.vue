@@ -58,7 +58,7 @@ const cargarCatalogos = async () => {
     anios.value = listaAnios;
     grados.value = respuestaGrados.grados;
     docentes.value = profesores
-      .filter((p) => p.user?.estado === "activo")
+      .filter((p) => !!p.user)
       .sort((a, b) => a.codigo.localeCompare(b.codigo));
   } catch (error) {
     errorCarga.value = mensajeError(error, "No se pudieron cargar los catálogos");

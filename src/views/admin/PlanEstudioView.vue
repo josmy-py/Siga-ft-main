@@ -1,11 +1,11 @@
 <script setup>
-// M2.5: planes de estudio por grado y especialidad, con sus materias (D-C1).
+// M2.5: planes de estudio con su especialidad y sus materias (D-C1).
 // Todos los usuarios con sesión consultan; solo el DIRECTOR modifica (D-C3)
 import { nextTick, onMounted, ref } from 'vue'
 import FormPlanEstudio from '@/modules/Admin/Forms/PlanEstudio.vue'
 import TablePlanEstudio from '@/modules/Admin/Tables/TablaPlanEstudio.vue'
 import MateriasView from '@/views/admin/MateriaView.vue'
-import { gradoService, especialidadService, planEstudioService } from '@/services/catalogoService'
+import { especialidadService, planEstudioService } from '@/services/catalogoService'
 import { mensajeError } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -14,7 +14,6 @@ const formulario = ref(null)
 const tabla = ref(null)
 const panelMaterias = ref(null)
 
-const grados = ref([])
 const especialidades = ref([])
 const errorCatalogos = ref(null)
 const editado = ref(null)
@@ -22,14 +21,10 @@ const planAbierto = ref(null)
 
 onMounted(async () => {
     try {
-        const [respuestaGrados, respuestaEspecialidades] = await Promise.all([
-            gradoService.getAll(),
-            especialidadService.getAll(),
-        ])
-        grados.value = respuestaGrados.grados
+        const respuestaEspecialidades = await especialidadService.getAll()
         especialidades.value = [...respuestaEspecialidades.especialidades].sort((a, b) => a.nombre.localeCompare(b.nombre))
     } catch (error) {
-        errorCatalogos.value = mensajeError(error, 'No se pudieron cargar los grados y especialidades')
+        errorCatalogos.value = mensajeError(error, 'No se pudieron cargar las especialidades')
     }
 })
 
@@ -78,14 +73,12 @@ const alEliminar = (plan) => {
             v-if="auth.esDirector"
             ref="formulario"
             :plan="editado"
-            :grados="grados"
             :especialidades="especialidades"
             @guardado="alGuardar"
             @cancelar="editado = null"
         />
         <TablePlanEstudio
             ref="tabla"
-            :grados="grados"
             :plan-seleccionado-id="planAbierto?.id ?? null"
             @editar="editar"
             @materias="abrirMaterias"

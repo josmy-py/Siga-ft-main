@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 import { estudianteService } from "../../services/estudianteService";
+import { consultaService } from "../../services/consultaService";
+import ComprobanteMatricula from "../../components/ComprobanteMatricula.vue";
 import { familiaService } from "../../services/familiaService";
-import { usuarioService } from "../../services/usuarioService";
 import { erroresCampos, mensajeError } from "../../services/api";
 
 // M5: ficha del estudiante para la dirección (API real): datos, cuenta responsable,
@@ -14,6 +15,9 @@ const props = defineProps({
 const emit = defineEmits(["cerrar", "cambiado"]);
 
 const alumno = ref(null);
+// M11 Consultar expediente: resultado de cada matrícula (nota final y conducta)
+const resultados = ref({});
+const comprobanteId = ref(null);
 const permisos = ref({});
 const cargando = ref(true);
 const error = ref("");
@@ -22,11 +26,6 @@ const error = ref("");
 const vinculo = ref({ dui: "", parentesco: "" });
 const erroresVinculo = ref({});
 const vinculando = ref(false);
-
-// D-E3: cambio de cuenta responsable
-const cuentas = ref([]);
-const cuentaNueva = ref("");
-const errorCuenta = ref("");
 
 const ultima = computed(() => alumno.value?.matriculas?.[0] ?? null);
 const ubicacion = computed(() => {
@@ -38,9 +37,13 @@ const cargar = async () => {
   cargando.value = true;
   error.value = "";
   try {
-    const ficha = await estudianteService.obtener(props.estudianteId);
+    const [ficha, expediente] = await Promise.all([
+      estudianteService.obtener(props.estudianteId),
+      consultaService.expediente(props.estudianteId),
+    ]);
     alumno.value = ficha.estudiante;
     permisos.value = ficha.permisos;
+    resultados.value = Object.fromEntries(expediente.resultados.map((r) => [r.matricula_id, r]));
   } catch (e) {
     error.value = mensajeError(e, "No se pudo cargar la ficha del estudiante.");
   } finally {
@@ -48,17 +51,8 @@ const cargar = async () => {
   }
 };
 
-const cargarCuentas = async () => {
-  try {
-    cuentas.value = await usuarioService.listar({ rol: "ENCARGADO", estado: "activo" });
-  } catch {
-    cuentas.value = [];
-  }
-};
-
 onMounted(() => {
   cargar();
-  cargarCuentas();
 });
 
 const exito = (titulo) => Swal.fire({ icon: "success", title: titulo, timer: 2000, showConfirmButton: false });
@@ -102,32 +96,6 @@ const quitar = async (padre) => {
   }
 };
 
-const cambiarCuenta = async () => {
-  errorCuenta.value = "";
-  if (!cuentaNueva.value) {
-    errorCuenta.value = "Seleccione la cuenta de destino.";
-    return;
-  }
-  const destino = cuentas.value.find((c) => c.id === cuentaNueva.value);
-  const { isConfirmed } = await Swal.fire({
-    icon: "question",
-    title: "¿Cambiar la cuenta responsable?",
-    text: `${alumno.value.nombre} pasará a la cuenta de ${destino?.nombre}. La cuenta anterior dejará de verlo.`,
-    showCancelButton: true,
-    confirmButtonText: "Sí, cambiar",
-    cancelButtonText: "Cancelar",
-  });
-  if (!isConfirmed) return;
-  try {
-    const { message } = await estudianteService.cambiarCuenta(props.estudianteId, cuentaNueva.value);
-    cuentaNueva.value = "";
-    exito(message);
-    await cargar();
-    emit("cambiado");
-  } catch (e) {
-    errorCuenta.value = erroresCampos(e).user_id ?? mensajeError(e, "No se pudo cambiar la cuenta");
-  }
-};
 </script>
 
 <template>
@@ -198,25 +166,13 @@ const cambiarCuenta = async () => {
           </p>
         </div>
 
-        <!-- CUENTA RESPONSABLE (D-E3) -->
+        <!-- CUENTA RESPONSABLE -->
         <div class="bg-white rounded-2xl border shadow-sm p-6">
           <h3 class="font-semibold mb-4"><i class="pi pi-user-edit mr-2"></i> Cuenta responsable</h3>
           <p class="text-sm">
-            <b>{{ alumno.user?.nombre || "Sin cuenta" }}</b>
+            <b>{{ alumno.user?.email || "Sin cuenta" }}</b>
             <span class="text-gray-500"> · {{ alumno.user?.email }}</span>
           </p>
-          <div v-if="permisos.cambiar_cuenta" class="flex flex-wrap gap-3 mt-4 items-start">
-            <select v-model="cuentaNueva" class="flex-1 min-w-[220px] border p-2 rounded-lg">
-              <option value="">Pasar a otra cuenta de encargado...</option>
-              <option v-for="c in cuentas.filter((c) => c.id !== alumno.user_id)" :key="c.id" :value="c.id">
-                {{ c.nombre }} ({{ c.email }})
-              </option>
-            </select>
-            <button @click="cambiarCuenta" class="px-4 py-2 rounded-lg border border-indigo-500 text-indigo-600 hover:bg-indigo-50">
-              Cambiar cuenta
-            </button>
-          </div>
-          <p v-if="errorCuenta" class="text-xs text-red-600 mt-2">{{ errorCuenta }}</p>
         </div>
 
         <!-- PADRES -->
@@ -294,12 +250,27 @@ const cambiarCuenta = async () => {
         <!-- MATRÍCULAS -->
         <div class="bg-white rounded-2xl border shadow-sm p-6">
           <h3 class="font-semibold mb-4"><i class="pi pi-book mr-2"></i> Matrículas</h3>
-          <div v-for="m in alumno.matriculas" :key="m.id" class="flex justify-between p-3 bg-gray-50 rounded-xl mb-2 text-sm">
-            <span>{{ m.anio_lectivo?.nombre || "Sin año" }} · {{ m.seccion?.grado?.nombre || "—" }} {{ m.seccion?.nombre || "" }}</span>
-            <span class="font-semibold">{{ m.estado }}</span>
+          <div v-for="m in alumno.matriculas" :key="m.id" class="p-3 bg-gray-50 rounded-xl mb-2 text-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span>{{ m.anio_lectivo?.nombre || "Sin año" }} · {{ m.seccion?.grado?.nombre || "—" }} {{ m.seccion?.nombre || "" }}</span>
+              <span class="flex items-center gap-3">
+                <span class="font-semibold">{{ m.estado }}</span>
+                <button class="text-blue-600 hover:underline" @click="comprobanteId = m.id">
+                  <i class="pi pi-file mr-1"></i>Comprobante
+                </button>
+              </span>
+            </div>
+            <p v-if="resultados[m.id]?.nota_final" class="mt-1 text-gray-600">
+              Nota final: {{ Number(resultados[m.id].nota_final.promedio_anual).toFixed(2) }} ({{ resultados[m.id].nota_final.estado }})
+            </p>
+            <p v-for="(c, i) in resultados[m.id]?.conducta ?? []" :key="i" class="mt-1 text-gray-600">
+              Conducta {{ c.periodo }}: {{ c.valoracion }} · {{ c.descripcion }}
+            </p>
           </div>
           <p v-if="!alumno.matriculas?.length" class="text-sm text-gray-500">Sin matrículas registradas.</p>
         </div>
+
+        <ComprobanteMatricula v-if="comprobanteId" :matricula-id="comprobanteId" @cerrar="comprobanteId = null" />
 
         <div class="flex justify-end">
           <button

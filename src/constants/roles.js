@@ -1,4 +1,4 @@
-// Roles técnicos del backend (Spatie, guard api) y su etiqueta visible.
+// Roles del backend (tabla roles del diagrama) y su etiqueta visible.
 // El backend es la autoridad: estos valores solo sirven para navegar y mostrar.
 export const ROLES = Object.freeze({
   DIRECTOR: 'DIRECTOR',
@@ -19,9 +19,9 @@ export const ROL_OPCIONES = Object.values(ROLES).map((valor) => ({
 
 // Pantalla de inicio de cada rol después de iniciar sesión
 export const RUTA_INICIO_POR_ROL = Object.freeze({
-  DIRECTOR: 'dashboard-admin',
-  DOCENTE: 'dashboard-docente',
-  ENCARGADO: 'dashboard-cliente',
+  DIRECTOR: 'estudiantes-admin',
+  DOCENTE: 'notas-docente',
+  ENCARGADO: 'inicio-cliente',
 })
 
 // Cambio de contraseña dentro del área de cada rol
@@ -29,12 +29,6 @@ export const RUTA_CONTRASENA_POR_ROL = Object.freeze({
   DIRECTOR: 'contrasena-admin',
   DOCENTE: 'contrasena-docente',
   ENCARGADO: 'contrasena-cliente',
-})
-
-export const ESTADO_ETIQUETAS = Object.freeze({
-  pendiente: 'Pendiente',
-  activo: 'Activo',
-  inactivo: 'Inactivo',
 })
 
 export const etiquetaRol = (rol) => ROL_ETIQUETAS[rol] ?? 'Sin rol'

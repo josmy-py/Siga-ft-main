@@ -58,12 +58,6 @@ const handleNavClick = () => {
       </div>
 
       <nav class="mt-4 flex flex-col text-sm pb-24">
-        <router-link to="/Admin/dashboard" class="menu-item" @click="handleNavClick">
-          <div class="bg-white drop-shadow p-2 rounded-full">
-            <i class="pi pi-home text-blue-500"></i>
-          </div>
-          Inicio
-        </router-link>
 
         <router-link to="/Admin/gestion-usuarios" class="menu-item" @click="handleNavClick">
           <div class="bg-white drop-shadow p-2 rounded-full">
@@ -105,13 +99,6 @@ const handleNavClick = () => {
             <i class="pi pi-chart-bar text-blue-500"></i>
           </div>
           Reportes
-        </router-link>
-
-        <router-link to="/Admin/constancia" class="menu-item" @click="handleNavClick">
-          <div class="bg-white drop-shadow p-2 rounded-full">
-            <i class="pi pi-book text-blue-500"></i>
-          </div>
-          Constancias
         </router-link>
 
         <router-link to="/Admin/anios-lectivos" class="menu-item" @click="handleNavClick">

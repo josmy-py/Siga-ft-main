@@ -14,7 +14,7 @@ export const profesorService = {
     return data.profesor
   },
 
-  // nombre, dui, email, fecha_nacimiento, telefono, direccion, especialidad, fecha_contratacion
+  // nombre, dui, email, password (si la cuenta es nueva), fecha_nacimiento, telefono y direccion
   async crear(datos) {
     const { data } = await api.post('/profesores', datos)
     return data

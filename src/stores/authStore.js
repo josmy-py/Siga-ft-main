@@ -6,7 +6,7 @@ import { RUTA_INICIO_POR_ROL, etiquetaRol } from '@/constants/roles'
 /**
  * Sesión única de la aplicación (sustituye a stores/user.js).
  * Guarda el token JWT, su vencimiento y los datos de la cuenta que devuelve
- * el backend (nombre, dui, email, estado y rol). Nunca guarda contraseñas.
+ * el backend (email y rol). Nunca guarda contraseñas.
  */
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -49,13 +49,13 @@ export const useAuthStore = defineStore('auth', {
       return data.user
     },
 
-    // Registro público: crea la cuenta pendiente; no inicia sesión
+    // Registro público: crea la cuenta ENCARGADO; no inicia sesión
     async register(datos) {
       const { data } = await api.post('/auth/register', datos)
       return data
     },
 
-    // Confirma la sesión con el backend y actualiza nombre, estado y rol
+    // Confirma la sesión con el backend y actualiza el rol
     async me() {
       const { data } = await api.get('/auth/me')
       this.user = data.user

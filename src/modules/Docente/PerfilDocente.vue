@@ -5,8 +5,7 @@
         <div class="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center mx-auto mb-4">
           <i class="pi pi-user text-2xl text-white"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-800">{{ user.nombre }}</h2>
-        <p class="text-gray-500 mt-1">{{ user.email }}</p>
+        <h2 class="text-2xl font-bold text-gray-800">{{ user.email }}</h2>
       </div>
 
       <div class="space-y-4">
@@ -31,14 +30,6 @@
           <div>
             <p class="text-sm font-medium text-gray-600">Rol</p>
             <p class="text-gray-800 capitalize">{{ user.rol }}</p>
-          </div>
-        </div>
-
-        <div class="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-          <i class="pi pi-briefcase text-blue-500 w-5 h-5"></i>
-          <div>
-            <p class="text-sm font-medium text-gray-600">Especialidad</p>
-            <p class="text-gray-800">{{ user.especialidad }}</p>
           </div>
         </div>
 

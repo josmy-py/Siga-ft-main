@@ -13,25 +13,15 @@ export const usuarioService = {
     return data.usuario
   },
 
-  // nombre, dui, email, rol. La persona define su contraseña con el enlace del correo.
+  // email, password y rol (campos del diagrama)
   async crear(datos) {
     const { data } = await api.post('/usuarios', datos)
     return data
   },
 
-  // nombre, email, rol (el DUI no es editable)
+  // email y rol
   async actualizar(id, datos) {
     const { data } = await api.put(`/usuarios/${id}`, datos)
-    return data
-  },
-
-  async cambiarEstado(id, estado) {
-    const { data } = await api.patch(`/usuarios/${id}/estado`, { estado })
-    return data
-  },
-
-  async reenviarEnlace(id) {
-    const { data } = await api.post(`/usuarios/${id}/reenviar-enlace`)
     return data
   },
 

@@ -3,7 +3,6 @@ import { computed, ref } from "vue";
 import { usuarioService } from "@/services/usuarioService";
 import { erroresCampos, mensajeError } from "@/services/api";
 import { ROL_OPCIONES } from "@/constants/roles";
-import { duiValido, normalizarDui } from "@/utils/dui";
 
 const props = defineProps({
   // Cuenta a editar; sin ella el formulario crea una nueva
@@ -13,14 +12,11 @@ const props = defineProps({
 const emit = defineEmits(["cerrar", "guardado"]);
 
 const editando = computed(() => !!props.usuario);
-// Cuenta heredada sin DUI: el director puede completarlo una sola vez
-const completarDui = computed(() => editando.value && !props.usuario?.dui);
-const duiBloqueado = computed(() => editando.value && !completarDui.value);
 
+// Campos del diagrama: email, password y rol
 const formData = ref({
-  nombre: props.usuario?.nombre ?? "",
   email: props.usuario?.email ?? "",
-  dui: props.usuario?.dui ?? "",
+  password: "",
   rol: props.usuario?.rol ?? "",
 });
 
@@ -32,20 +28,17 @@ const guardarForm = async () => {
   errores.value = {};
   errorGeneral.value = null;
 
-  const validarDui = !editando.value || (completarDui.value && formData.value.dui);
-  if (validarDui && !duiValido(formData.value.dui)) {
-    errores.value = { dui: "El DUI no es válido. Use el formato 00000000-0." };
+  const { email, password, rol } = formData.value;
+  if (!editando.value && (password.length < 8 || !/[a-zA-Z]/.test(password) || !/\d/.test(password))) {
+    errores.value = { password: "La contraseña debe tener al menos 8 caracteres, con letras y números." };
     return;
   }
 
   guardando.value = true;
   try {
-    const { nombre, email, rol, dui } = formData.value;
     const respuesta = editando.value
-      ? await usuarioService.actualizar(props.usuario.id, {
-          nombre, email, rol, ...(completarDui.value && dui ? { dui: normalizarDui(dui) } : {}),
-        })
-      : await usuarioService.crear({ nombre, email, rol, dui: normalizarDui(dui) });
+      ? await usuarioService.actualizar(props.usuario.id, { email, rol })
+      : await usuarioService.crear({ email, password, rol });
 
     emit("guardado", respuesta.message);
   } catch (error) {
@@ -54,6 +47,7 @@ const guardarForm = async () => {
       errorGeneral.value = mensajeError(error, "No se pudo guardar el usuario");
     }
   } finally {
+    formData.value.password = "";
     guardando.value = false;
   }
 };
@@ -90,22 +84,6 @@ const claseCampo = (campo) => [
 
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-2">
-            Nombre Completo
-          </label>
-
-          <input
-            v-model="formData.nombre"
-            type="text"
-            required
-            maxlength="80"
-            :class="claseCampo('nombre')"
-            placeholder="Ingrese el nombre"
-          />
-          <p v-if="errores.nombre" class="text-red-600 text-xs mt-1">{{ errores.nombre }}</p>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">
             Correo Electrónico
           </label>
 
@@ -119,22 +97,20 @@ const claseCampo = (campo) => [
           <p v-if="errores.email" class="text-red-600 text-xs mt-1">{{ errores.email }}</p>
         </div>
 
-        <div>
+        <div v-if="!editando">
           <label class="block text-sm font-medium text-slate-700 mb-2">
-            DUI
+            Contraseña
           </label>
 
           <input
-            v-model="formData.dui"
-            type="text"
-            :required="!editando"
-            :disabled="duiBloqueado"
-            :class="[claseCampo('dui'), duiBloqueado ? 'bg-slate-100 text-slate-500' : '']"
-            placeholder="00000000-0"
+            v-model="formData.password"
+            type="password"
+            required
+            autocomplete="new-password"
+            :class="claseCampo('password')"
+            placeholder="Mínimo 8 caracteres, letras y números"
           />
-          <p v-if="errores.dui" class="text-red-600 text-xs mt-1">{{ errores.dui }}</p>
-          <p v-else-if="completarDui" class="text-slate-500 text-xs mt-1">Esta cuenta no tiene DUI. Ingréselo solo si lo verificó con un documento; después no podrá modificarse.</p>
-          <p v-else-if="editando" class="text-slate-500 text-xs mt-1">El DUI no puede modificarse.</p>
+          <p v-if="errores.password" class="text-red-600 text-xs mt-1">{{ errores.password }}</p>
         </div>
 
         <div>
@@ -158,8 +134,7 @@ const claseCampo = (campo) => [
       </div>
 
       <p v-if="!editando" class="mt-6 text-sm text-slate-500">
-        La cuenta se crea pendiente. La persona recibirá un enlace en su correo para definir su contraseña;
-        al hacerlo, la cuenta quedará activa.
+        Comparta la contraseña con la persona; podrá cambiarla desde su sesión.
       </p>
 
       <div class="flex justify-end gap-4 mt-8 pt-6 border-t">

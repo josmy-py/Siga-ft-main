@@ -7,18 +7,13 @@ import { erroresCampos, mensajeError } from "@/services/api";
 const props = defineProps({
   // Plan a editar; sin él el formulario registra uno nuevo
   plan: { type: Object, default: null },
-  grados: { type: Array, default: () => [] },
   especialidades: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(["guardado", "cancelar"]);
 
-// Bachillerato empieza en el orden 10 del catálogo oficial de grados
-const ORDEN_BACHILLERATO = 10;
-
 const vacio = () => ({
   nombre: "",
-  grado_id: "",
   especialidad_id: "",
   estado: true,
   fecha_aprobacion: "",
@@ -33,19 +28,11 @@ const errorGeneral = ref(null);
 const guardando = ref(false);
 
 const editando = computed(() => !!props.plan);
-const gradoElegido = computed(() => props.grados.find((g) => g.id === Number(Plan.value.grado_id)));
-// La especialidad solo aplica a los planes de bachillerato
-const admiteEspecialidad = computed(() => (gradoElegido.value?.orden ?? -99) >= ORDEN_BACHILLERATO);
-
-watch(admiteEspecialidad, (admite) => {
-  if (!admite) Plan.value.especialidad_id = "";
-});
 
 const limpiar = () => {
   Plan.value = props.plan
     ? {
         nombre: props.plan.nombre,
-        grado_id: props.plan.grado_id ?? "",
         especialidad_id: props.plan.especialidad_id ?? "",
         estado: !!props.plan.estado,
         fecha_aprobacion: props.plan.fecha_aprobacion ?? "",
@@ -109,7 +96,7 @@ const claseCampo = (campo, bloqueado = false) => [
             {{ editando ? "Editar Plan de Estudio" : "Nuevo Plan de Estudio" }}
           </h2>
           <p class="text-blue-100">
-            {{ editando ? `Modificando: ${plan.nombre}` : "Pensum de un grado; sus materias se agregan después de guardarlo" }}
+            {{ editando ? `Modificando: ${plan.nombre}` : "Sus materias se agregan después de guardarlo" }}
           </p>
         </div>
 
@@ -129,7 +116,7 @@ const claseCampo = (campo, bloqueado = false) => [
               type="text"
               required
               maxlength="30"
-              placeholder="Ej: Plan 2026 Primer grado"
+              placeholder="Ej: Plan Básica 2026"
               :class="claseCampo('nombre')"
             />
             <p v-if="errores.nombre" class="text-red-600 text-xs mt-1">{{ errores.nombre }}</p>
@@ -137,27 +124,16 @@ const claseCampo = (campo, bloqueado = false) => [
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Grado</label>
-            <select v-model="Plan.grado_id" required :class="claseCampo('grado_id')">
-              <option value="" disabled>Selecciona un grado</option>
-              <option v-for="grado in grados" :key="grado.id" :value="grado.id">{{ grado.nombre }}</option>
-            </select>
-            <p v-if="errores.grado_id" class="text-red-600 text-xs mt-1">{{ errores.grado_id }}</p>
-            <p v-else-if="!grados.length" class="text-amber-600 text-xs mt-1">Registre primero los grados en Catálogos &gt; Grados.</p>
-          </div>
-
-          <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Especialidad</label>
             <select
               v-model="Plan.especialidad_id"
-              :disabled="!admiteEspecialidad"
-              :class="claseCampo('especialidad_id', !admiteEspecialidad)"
+              :class="claseCampo('especialidad_id')"
             >
               <option value="">Sin especialidad</option>
               <option v-for="esp in especialidades" :key="esp.id" :value="esp.id">{{ esp.nombre }}</option>
             </select>
             <p v-if="errores.especialidad_id" class="text-red-600 text-xs mt-1">{{ errores.especialidad_id }}</p>
-            <p v-else class="text-xs text-gray-500 mt-1">Solo para planes de bachillerato.</p>
+            <p v-else class="text-xs text-gray-500 mt-1">Opcional (planes de bachillerato).</p>
           </div>
         </div>
 
@@ -198,7 +174,7 @@ const claseCampo = (campo, bloqueado = false) => [
           <span>
             <span class="block text-sm font-medium text-gray-700">Plan vigente</span>
             <span class="block text-xs text-gray-500">
-              Solo puede haber un plan vigente por grado y especialidad. Sus materias son las que se podrán asignar a las secciones de ese grado.
+              Solo las materias de un plan vigente se pueden asignar a las secciones.
             </span>
           </span>
         </label>

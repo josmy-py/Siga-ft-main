@@ -1,77 +1,128 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import { asignacionService } from "../../services/asignacionService";
+import { conductaService } from "../../services/conductaService";
 
-const selectedTrimestre = ref("1");
+// Diagrama: SIGA Docente > Conducta > Registrar observaciones y Seguimiento conductual
+const secciones = ref([]);
+const seccionId = ref("");
+const periodos = ref([]);
+const periodoId = ref("");
+const valoraciones = ref([]);
+const editable = ref(false);
 
-const grados = ref(["3° B", "4° A"]);
+// Filas: { matricula_id, estudiante, descripcion, valoracion, original }
+const filas = ref([]);
 
-const selectedGrado = ref("3° B");
+const cargando = ref(true);
+const guardando = ref(false);
+const error = ref("");
+const aviso = ref("");
+const errores = ref({});
 
-const estudiantesPorGrado = ref({
-  "3° B": [
-    { id: 1, nombre: "Ana Martínez González" },
-    { id: 2, nombre: "Carlos López Ramírez" },
-    { id: 3, nombre: "María García Hernández" },
-  ],
-  "4° A": [
-    { id: 4, nombre: "Luis Pérez Sánchez" },
-    { id: 5, nombre: "Laura Ruiz Martínez" },
-  ],
+const mensaje = (e, porDefecto) => e.response?.data?.message ?? porDefecto;
+
+const etiqueta = (s) => `${s.grado?.nombre ?? ""} ${s.nombre ?? ""}`.trim();
+
+const cambiadas = computed(() =>
+  filas.value.filter(
+    (f) =>
+      (f.descripcion.trim() || f.valoracion) &&
+      (f.descripcion.trim() !== (f.original?.descripcion ?? "") || f.valoracion !== (f.original?.valoracion ?? ""))
+  )
+);
+
+const incompletas = computed(() => cambiadas.value.filter((f) => !f.descripcion.trim() || !f.valoracion));
+
+const claseValoracion = (v) =>
+  ({
+    Excelente: "bg-green-100 text-green-700",
+    Bueno: "bg-blue-100 text-blue-700",
+    Malo: "bg-yellow-100 text-yellow-700",
+    Deficiente: "bg-red-100 text-red-700",
+  })[v] ?? "bg-gray-100 text-gray-500";
+
+const cargar = async (periodo = null) => {
+  filas.value = [];
+  if (!seccionId.value) return;
+  cargando.value = true;
+  error.value = "";
+  errores.value = {};
+  try {
+    const data = await conductaService.listar(seccionId.value, periodo);
+    periodos.value = data.periodos;
+    valoraciones.value = data.valoraciones;
+    editable.value = data.editable;
+    if (String(periodoId.value) !== String(data.periodo?.id ?? "")) {
+      periodoId.value = data.periodo?.id ?? "";
+    }
+    filas.value = data.estudiantes.map((e) => ({
+      matricula_id: e.matricula_id,
+      estudiante: e.estudiante,
+      descripcion: e.conducta?.descripcion ?? "",
+      valoracion: e.conducta?.valoracion ?? "",
+      original: e.conducta,
+    }));
+  } catch (e) {
+    error.value = mensaje(e, "No se pudo cargar la conducta.");
+  } finally {
+    cargando.value = false;
+  }
+};
+
+onMounted(async () => {
+  try {
+    const carga = await asignacionService.miCarga();
+    secciones.value = (carga.secciones ?? []).map((s) => s.seccion);
+    seccionId.value = secciones.value[0]?.id ?? "";
+  } catch (e) {
+    error.value = mensaje(e, "No se pudo cargar tu carga académica.");
+  } finally {
+    cargando.value = false;
+  }
 });
 
-const selectedEstudiante = ref(null);
-
-const estudiantes = computed(() => {
-  return estudiantesPorGrado.value[selectedGrado.value] || [];
+watch(seccionId, () => {
+  periodoId.value = "";
+  cargar();
 });
 
-const aspectosConducta = ref([
-  {
-    id: 1,
-    nombre: "Participa activamente en las actividades académicas y extracurriculares.",
-    valor: 3,
-  },
-  {
-    id: 2,
-    nombre: "Demuestra respeto hacia compañeros, docentes y personal de la institución.",
-    valor: 3,
-  },
-  { id: 3, nombre: "Cumple puntualmente con las tareas y responsabilidades asignadas.", valor: 3 },
-  {
-    id: 4,
-    nombre: "Muestra interés por aprender y mejorar continuamente su rendimiento académico.",
-    valor: 3,
-  },
-  {
-    id: 5,
-    nombre: "Mantiene una actitud positiva frente a los desafíos y dificultades.",
-    valor: 3,
-  },
-  {
-    id: 6,
-    nombre: "Respeta las normas de convivencia y el reglamento interno de la institución.",
-    valor: 3,
-  },
-]);
+const cambiarPeriodo = () => {
+  aviso.value = "";
+  cargar(periodoId.value);
+};
 
-const promedioCalculado = computed(() => {
-  if (aspectosConducta.value.length === 0) return 0;
-  const total = aspectosConducta.value.reduce((sum, a) => sum + a.valor, 0);
-  return (total / aspectosConducta.value.length).toFixed(1);
-});
-
-const getConductaTexto = (promedio) => {
-  const val = parseFloat(promedio);
-  if (val >= 3.5) return "Excelente";
-  if (val >= 2.5) return "Bueno";
-  if (val >= 1.5) return "Malo";
-  return "Deficiente";
+// Conducta.registrar() / actualizar(descripcion, valoracion)
+const guardar = async () => {
+  if (!cambiadas.value.length || incompletas.value.length) return;
+  guardando.value = true;
+  error.value = "";
+  aviso.value = "";
+  errores.value = {};
+  try {
+    const r = await conductaService.guardar(
+      seccionId.value,
+      periodoId.value,
+      cambiadas.value.map((f) => ({
+        matricula_id: f.matricula_id,
+        descripcion: f.descripcion.trim(),
+        valoracion: f.valoracion,
+      }))
+    );
+    await cargar(periodoId.value);
+    aviso.value = `Conducta guardada: ${r.registradas} registradas, ${r.actualizadas} actualizadas.`;
+  } catch (e) {
+    errores.value = e.response?.data?.errors ?? {};
+    error.value = mensaje(e, "No se pudo guardar la conducta.");
+  } finally {
+    guardando.value = false;
+  }
 };
 </script>
 
 <template>
   <div class="relative min-h-screen bg-gray-50 md:flex">
-    <main class="flex-1 transition-all duration-300">
+    <main class="flex-1 min-w-0 transition-all duration-300">
       <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
         <div class="px-6 py-4 flex items-center justify-between">
           <div>
@@ -81,103 +132,100 @@ const getConductaTexto = (promedio) => {
       </header>
 
       <div class="p-6 lg:p-8">
-        <section class="mb-6">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"> Grado </label>
-
-              <select
-                v-model="selectedGrado"
-                @change="selectedEstudiante = null"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-              >
-                <option v-for="grado in grados" :key="grado" :value="grado">
-                  {{ grado }}
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"> Estudiante </label>
-
-              <select
-                v-model="selectedEstudiante"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-              >
-                <option :value="null">Seleccionar estudiante</option>
-
-                <option v-for="estudiante in estudiantes" :key="estudiante.id" :value="estudiante">
-                  {{ estudiante.nombre }}
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"> Trimestre </label>
-
-              <select
-                v-model="selectedTrimestre"
-                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent"
-              >
-                <option value="1">Trimestre 1</option>
-                <option value="2">Trimestre 2</option>
-                <option value="3">Trimestre 3</option>
-              </select>
-            </div>
+        <section class="mb-6 flex flex-wrap items-end gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"> Sección </label>
+            <select v-model="seccionId" class="px-4 py-2 border border-gray-300 rounded-lg">
+              <option v-if="!secciones.length" value="">Sin secciones</option>
+              <option v-for="s in secciones" :key="s.id" :value="s.id">{{ etiqueta(s) }}</option>
+            </select>
           </div>
-          <p class="text-sm text-gray-500">Período 2026</p>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"> Periodo </label>
+            <select v-model="periodoId" class="px-4 py-2 border border-gray-300 rounded-lg" @change="cambiarPeriodo">
+              <option v-if="!periodos.length" value="">Sin periodos</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+            </select>
+          </div>
         </section>
 
-        <div v-if="selectedEstudiante" class="space-y-6">
-          <div class="bg-white rounded-2xl shadow-md p-6">
-            <div class="mb-4">
-              <h2 class="text-xl font-semibold text-gray-800">
-                Evaluación de Conducta - {{ selectedEstudiante.nombre }}
-              </h2>
-            </div>
+        <p v-if="error" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{{ error }}</p>
+        <p v-if="aviso" class="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{{ aviso }}</p>
+        <p
+          v-if="periodoId && !cargando && !editable"
+          class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700"
+        >
+          El año lectivo de este periodo no está activo: la conducta solo se puede consultar.
+        </p>
 
-            <div class="space-y-4">
-              <div
-                v-for="aspecto in aspectosConducta"
-                :key="aspecto.id"
-                class="flex items-center justify-between py-3 border-b border-gray-100"
-              >
-                <span class="font-medium text-gray-700">{{ aspecto.nombre }}</span>
-                <select
-                  v-model="aspecto.valor"
-                  class="px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option :value="1">1 - Deficiente</option>
-                  <option :value="3">3 - Malo</option>
-                  <option :value="4">4 - Bueno</option>
-                  <option :value="5">5 - Excelente</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="mt-6 pt-4 border-t border-gray-200 flex items-center justify-between">
-              <div>
-                <span class="text-sm text-gray-600">Promedio: </span>
-                <span class="text-2xl font-bold text-blue-600">{{ promedioCalculado }}</span>
-                <span
-                  class="ml-2 text-sm font-medium"
-                  :class="promedioCalculado >= 3 ? 'text-green-600' : 'text-yellow-600'"
-                >
-                  ({{ getConductaTexto(promedioCalculado) }})
-                </span>
-              </div>
-              <button
-                class="px-6 py-2 bg-blue-500 text-white border border-transparent rounded-lg hover:bg-blue-600 transition"
-              >
-                Guardar Evaluación
-              </button>
-            </div>
+        <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+          <div class="p-6 border-b flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-lg font-semibold text-gray-800">Observaciones del periodo</h2>
+            <button
+              v-if="editable && filas.length"
+              :disabled="guardando || !cambiadas.length || incompletas.length > 0"
+              class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50"
+              @click="guardar"
+            >
+              {{ guardando ? "Guardando..." : "Guardar conducta" }}
+            </button>
           </div>
-        </div>
 
-        <div v-else class="bg-white rounded-2xl shadow-md p-8 text-center">
-          <i class="pi pi-info-circle text-4xl text-gray-300 mb-4"></i>
-          <p class="text-gray-500">Seleccione un grado y estudiante para evaluar su conducta</p>
+          <p v-if="cargando" class="p-6 text-sm text-gray-500">
+            <i class="pi pi-spin pi-spinner mr-2"></i>Cargando...
+          </p>
+          <p v-else-if="!filas.length" class="p-6 text-sm text-gray-500">
+            No hay estudiantes con matrícula aprobada en esta sección.
+          </p>
+
+          <div v-else class="overflow-x-auto">
+            <table class="min-w-full">
+              <thead class="bg-slate-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-600">Estudiante</th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-600">Observación</th>
+                  <th class="px-6 py-3 text-center text-xs font-semibold uppercase text-gray-600">Valoración</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(f, i) in filas" :key="f.matricula_id" class="border-t border-gray-100">
+                  <td class="px-6 py-4 font-semibold text-gray-800">{{ f.estudiante?.nombre }}</td>
+                  <td class="px-6 py-4">
+                    <input
+                      v-model="f.descripcion"
+                      maxlength="100"
+                      :disabled="!editable"
+                      placeholder="Ej. Respeta las normas de convivencia"
+                      class="w-full min-w-64 px-3 py-2 border border-gray-200 rounded-lg disabled:bg-gray-50"
+                    />
+                    <p v-if="errores[`conductas.${i}.descripcion`]" class="text-xs text-red-600 mt-1">
+                      {{ errores[`conductas.${i}.descripcion`][0] }}
+                    </p>
+                  </td>
+                  <td class="px-6 py-4 text-center">
+                    <select
+                      v-if="editable"
+                      v-model="f.valoracion"
+                      class="px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Seleccione</option>
+                      <option v-for="v in valoraciones" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <span
+                      v-else
+                      class="px-3 py-1 rounded-full text-xs font-semibold"
+                      :class="claseValoracion(f.valoracion)"
+                    >
+                      {{ f.valoracion || "Sin registrar" }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-if="incompletas.length" class="px-6 py-3 text-sm text-amber-700">
+              Complete la observación y la valoración de cada estudiante que modificó.
+            </p>
+          </div>
         </div>
       </div>
     </main>

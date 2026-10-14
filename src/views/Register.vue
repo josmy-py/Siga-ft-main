@@ -1,13 +1,10 @@
 <template>
   <PantallaAuth
     titulo="Crear cuenta"
-    subtitulo="Registro para madres, padres y encargados. Recibirá un enlace para activar su cuenta."
+    subtitulo="Registro para madres, padres y encargados."
   >
     <template v-if="registrado">
       <AvisoAuth tipo="exito">{{ registrado }}</AvisoAuth>
-      <p class="text-white/80 text-sm text-center mb-5">
-        El enlace vence en poco tiempo. Si no lo recibe, puede solicitar uno nuevo desde la pantalla de inicio de sesión.
-      </p>
       <router-link
         :to="{ name: 'login' }"
         class="block text-center w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-xl shadow-xl transition"
@@ -20,10 +17,6 @@
       <AvisoAuth v-if="errorMessage">{{ errorMessage }}</AvisoAuth>
 
       <form @submit.prevent="handleRegister" class="space-y-4">
-        <CampoAuth v-model="form.nombre" etiqueta="Nombre completo" icono="pi pi-user" placeholder="Nombre y apellidos" autocomplete="name" :error="errores.nombre" />
-
-        <CampoAuth v-model="form.dui" etiqueta="DUI" icono="pi pi-id-card" placeholder="00000000-0" :error="errores.dui" />
-
         <CampoAuth v-model="form.email" etiqueta="Correo electrónico" icono="pi pi-envelope" tipo="email" placeholder="correo@ejemplo.com" autocomplete="email" :error="errores.email" />
 
         <CampoAuth v-model="form.password" etiqueta="Contraseña" icono="pi pi-lock" tipo="password" placeholder="Mínimo 8 caracteres, letras y números" autocomplete="new-password" :error="errores.password" />
@@ -51,14 +44,13 @@
 import { reactive, ref } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import { erroresCampos, mensajeError } from '@/services/api'
-import { duiValido, normalizarDui } from '@/utils/dui'
 import PantallaAuth from '@/components/auth/PantallaAuth.vue'
 import CampoAuth from '@/components/auth/CampoAuth.vue'
 import AvisoAuth from '@/components/auth/AvisoAuth.vue'
 
 const authStore = useAuthStore()
 
-const form = reactive({ nombre: '', dui: '', email: '', password: '', password_confirmation: '' })
+const form = reactive({ email: '', password: '', password_confirmation: '' })
 const loading = ref(false)
 const errorMessage = ref(null)
 const errores = ref({})
@@ -67,8 +59,7 @@ const registrado = ref(null)
 // Verificación previa; el backend repite todas las validaciones
 const validarLocal = () => {
   const e = {}
-  if (!form.nombre.trim()) e.nombre = 'El nombre es obligatorio.'
-  if (!duiValido(form.dui)) e.dui = 'El DUI no es válido. Use el formato 00000000-0.'
+  if (!form.email.trim()) e.email = 'El correo es obligatorio.'
   if (form.password.length < 8 || !/[a-zA-Z]/.test(form.password) || !/\d/.test(form.password)) {
     e.password = 'La contraseña debe tener al menos 8 caracteres, con letras y números.'
   }
@@ -83,7 +74,7 @@ const handleRegister = async () => {
 
   loading.value = true
   try {
-    const data = await authStore.register({ ...form, dui: normalizarDui(form.dui) })
+    const data = await authStore.register({ ...form })
     registrado.value = data.message
   } catch (error) {
     errores.value = erroresCampos(error)

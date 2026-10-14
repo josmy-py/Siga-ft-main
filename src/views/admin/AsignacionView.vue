@@ -32,12 +32,12 @@ const tarjetas = computed(() => {
     porDocente.get(a.profesor_id).push(a);
   }
   return docentes.value
-    .filter((d) => d.user?.estado === "activo" || porDocente.has(d.id))
+    .filter((d) => !!d.user || porDocente.has(d.id))
     .map((d) => {
       const carga = porDocente.get(d.id) ?? [];
       return {
         docente: d,
-        activo: d.user?.estado === "activo",
+        activo: !!d.user,
         carga,
         grados: new Set(carga.map((a) => a.seccion?.grado_id)).size,
         materias: carga.length,
@@ -190,7 +190,7 @@ const etiquetaSeccion = (a) => `${a.seccion?.grado?.nombre ?? ""} ${a.seccion?.n
 
                     <p class="text-sm text-slate-500">
                       {{ tarjeta.docente.codigo }}
-                      <span v-if="!tarjeta.activo" class="text-amber-600">· cuenta no activa</span>
+                      <span v-if="!tarjeta.activo" class="text-amber-600">· sin cuenta DOCENTE</span>
                       <span v-else-if="!tarjeta.materias" class="text-slate-400">· sin carga</span>
                     </p>
                   </div>
@@ -253,7 +253,7 @@ const etiquetaSeccion = (a) => `${a.seccion?.grado?.nombre ?? ""} ${a.seccion?.n
                   v-if="!anioCerrado"
                   @click="abrirAsignacion(tarjeta.docente)"
                   :disabled="!tarjeta.activo"
-                  :title="tarjeta.activo ? 'Editar carga académica' : 'La cuenta del docente no está activa'"
+                  :title="tarjeta.activo ? 'Editar carga académica' : 'El docente no tiene cuenta DOCENTE'"
                   class="py-3 rounded-2xl border border-transparent bg-blue-500 hover:bg-blue-600 text-white transition disabled:opacity-50"
                 >
                   <i class="pi pi-pencil"></i>
@@ -277,7 +277,7 @@ const etiquetaSeccion = (a) => `${a.seccion?.grado?.nombre ?? ""} ${a.seccion?.n
           v-if="mostrarAsignacion"
           :anio="anioSeleccionado"
           :docente-inicial="docenteEditado"
-          :docentes="docentes.filter((d) => d.user?.estado === 'activo')"
+          :docentes="docentes.filter((d) => !!d.user)"
           :asignaciones="asignaciones"
           @cerrar="cerrarAsignacion"
           @guardado="alGuardar"

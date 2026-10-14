@@ -6,7 +6,6 @@ import { mensajeError } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
 defineProps({
-  grados: { type: Array, default: () => [] },
   // Plan cuyas materias están abiertas debajo de la tabla
   planSeleccionadoId: { type: Number, default: null },
 });
@@ -15,7 +14,7 @@ const emit = defineEmits(["editar", "materias", "eliminado"]);
 const auth = useAuthStore();
 
 const Planes = ref([]);
-const filtros = ref({ grado_id: "", vigente: "" });
+const filtros = ref({ vigente: "" });
 const cargando = ref(false);
 const errorCarga = ref(null);
 
@@ -24,7 +23,6 @@ const cargar = async () => {
   errorCarga.value = null;
   try {
     const parametros = {};
-    if (filtros.value.grado_id) parametros.grado_id = filtros.value.grado_id;
     if (filtros.value.vigente !== "") parametros.vigente = filtros.value.vigente;
     Planes.value = await planEstudioService.listar(parametros);
   } catch (error) {
@@ -70,15 +68,11 @@ const eliminar = async (plan) => {
         <div>
           <h2 class="text-2xl font-bold text-gray-800">Planes de Estudio</h2>
           <p class="text-gray-500 text-sm mt-1">
-            Cada plan pertenece a un grado; sus materias forman el pensum que se asigna a las secciones.
+            Las materias de cada plan son las que se asignan a las secciones.
           </p>
         </div>
 
         <div class="flex flex-col sm:flex-row gap-3">
-          <select v-model="filtros.grado_id" @change="cargar" class="h-11 px-3 border border-gray-200 rounded-xl">
-            <option value="">Todos los grados</option>
-            <option v-for="grado in grados" :key="grado.id" :value="grado.id">{{ grado.nombre }}</option>
-          </select>
           <select v-model="filtros.vigente" @change="cargar" class="h-11 px-3 border border-gray-200 rounded-xl">
             <option value="">Vigentes y no vigentes</option>
             <option value="1">Solo vigentes</option>
@@ -99,7 +93,6 @@ const eliminar = async (plan) => {
           <thead class="bg-slate-50">
             <tr>
               <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Plan</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Grado</th>
               <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Especialidad</th>
               <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Vigencia</th>
               <th class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Materias</th>
@@ -110,10 +103,10 @@ const eliminar = async (plan) => {
           <tbody>
 
             <tr v-if="cargando && !Planes.length">
-              <td colspan="6" class="text-center py-6 text-slate-500">Cargando planes de estudio...</td>
+              <td colspan="5" class="text-center py-6 text-slate-500">Cargando planes de estudio...</td>
             </tr>
             <tr v-else-if="!Planes.length">
-              <td colspan="6" class="text-center py-6 text-slate-500">No hay planes de estudio con estos filtros.</td>
+              <td colspan="5" class="text-center py-6 text-slate-500">No hay planes de estudio con estos filtros.</td>
             </tr>
 
             <tr
@@ -126,7 +119,6 @@ const eliminar = async (plan) => {
                 <div class="font-medium text-gray-800">{{ plan.nombre }}</div>
                 <div class="text-xs text-gray-500 max-w-xs truncate" :title="plan.descripcion">{{ plan.descripcion }}</div>
               </td>
-              <td class="px-6 py-4 text-gray-700">{{ plan.grado?.nombre ?? "Sin grado" }}</td>
               <td class="px-6 py-4 text-gray-700">{{ plan.especialidad?.nombre ?? "—" }}</td>
               <td class="px-6 py-4 text-gray-700 text-sm whitespace-nowrap">
                 {{ fecha(plan.fecha_inicio) }} – {{ fecha(plan.fecha_fin) }}

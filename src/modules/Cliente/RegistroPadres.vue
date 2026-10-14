@@ -22,13 +22,17 @@ const ordenados = computed(() =>
   [...padres.value].sort((a, b) => Number(!!vinculoCon(b)) - Number(!!vinculoCon(a)) || a.nombre.localeCompare(b.nombre))
 );
 
+const cuentaConResponsable = ref(false);
+
 const cargar = async () => {
   cargando.value = true;
   error.value = "";
   try {
-    const [lista, familia] = await Promise.all([estudianteService.listar(), familiaService.padres()]);
+    const [lista, familia, perfil] = await Promise.all([estudianteService.listar(), familiaService.padres(), familiaService.perfil()]);
     estudiantes.value = lista;
     padres.value = familia;
+    // Un solo responsable por cuenta: con perfil de encargado (o ya registrada como padre) no se marca «Soy yo»
+    cuentaConResponsable.value = !!(perfil.encargado || perfil.padre);
     if (!estudiantes.value.some((e) => e.id === estudianteId.value)) estudianteId.value = estudiantes.value[0]?.id ?? null;
   } catch (e) {
     error.value = mensajeError(e, "No se pudieron cargar los padres.");
@@ -349,7 +353,7 @@ watch(estudianteId, () => (mostrarModal.value = false));
                     <p v-if="errores.email" class="text-xs text-red-600 mt-1">{{ errores.email }}</p>
                   </div>
                 </div>
-                <label class="flex items-center gap-2 text-sm text-gray-700">
+                <label v-if="!cuentaConResponsable" class="flex items-center gap-2 text-sm text-gray-700">
                   <input type="checkbox" v-model="nuevoPadre.esCuenta" class="w-4 h-4" />
                   Soy yo: esta persona es la titular de esta cuenta
                 </label>

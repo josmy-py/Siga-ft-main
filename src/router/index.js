@@ -1,18 +1,15 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "@/stores/authStore";
 import { ROLES } from "@/constants/roles";
+import { RUTAS_APROBADA, useEstadoMatricula } from "@/composables/useEstadoMatricula";
 
 // Layouts
 import AdminLayout from "../layouts/AdminLayout.vue";
 import ClienteLayout from "../layouts/ClienteLayout.vue";
 
 // Vistas principales
-import HomeView from "../views/HomeView.vue";
 import Login from "../views/Login.vue";
 import Register from "../views/Register.vue";
-
-// Cliente
-import DashboardCliente from "../modules/Cliente/DashboardCliente.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,8 +21,7 @@ const router = createRouter({
 
     {
       path: "/",
-      name: "home",
-      component: HomeView,
+      redirect: { name: "login" },
     },
 
     {
@@ -42,31 +38,6 @@ const router = createRouter({
       meta: { soloInvitados: true },
     },
 
-    {
-      path: "/activar",
-      name: "activar-cuenta",
-      component: () => import("../views/ActivarCuenta.vue"),
-    },
-
-    {
-      path: "/olvide-contrasena",
-      name: "olvide-contrasena",
-      component: () => import("../views/OlvideContrasena.vue"),
-      meta: { soloInvitados: true },
-    },
-
-    {
-      path: "/restablecer-contrasena",
-      name: "restablecer-contrasena",
-      component: () => import("../views/RestablecerContrasena.vue"),
-    },
-
-    {
-      path: "/about",
-      name: "about",
-      component: () => import("../views/AboutView.vue"),
-    },
-
     // =========================================================
     // CLIENTE
     // =========================================================
@@ -77,9 +48,20 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: [ROLES.ENCARGADO] },
       children: [
         {
-          path: "dashboard",
-          name: "dashboard-cliente",
-          component: DashboardCliente,
+          path: "",
+          redirect: { name: "inicio-cliente" },
+        },
+
+        {
+          path: "inicio",
+          name: "inicio-cliente",
+          component: () => import("../modules/Cliente/InicioCliente.vue"),
+        },
+
+        {
+          path: "asignaturas",
+          name: "asignaturas-cliente",
+          component: () => import("../modules/Cliente/AsignaturasCliente.vue"),
         },
 
         {
@@ -113,21 +95,9 @@ const router = createRouter({
         },
 
         {
-          path: "asignaturas",
-          name: "asignaturas-cliente",
-          component: () => import("../modules/Cliente/AsignaturasCliente.vue"),
-        },
-
-        {
           path: "padres",
           name: "registro-padres",
           component: () => import("../modules/Cliente/RegistroPadres.vue"),
-        },
-
-        {
-          path: "avisos",
-          name: "avisos-cliente",
-          component: () => import("../modules/Cliente/AvisosCliente.vue"),
         },
 
         {
@@ -147,11 +117,6 @@ const router = createRouter({
       component: () => import("../layouts/DocenteLayout.vue"),
       meta: { requiresAuth: true, roles: [ROLES.DOCENTE] },
       children: [
-        {
-          path: "dashboard",
-          name: "dashboard-docente",
-          component: () => import("../modules/Docente/DashboardDocente.vue"),
-        },
 
         {
           path: "perfil",
@@ -175,12 +140,6 @@ const router = createRouter({
           path: "estudiantes",
           name: "estudiantes-docente",
           component: () => import("../modules/Docente/EstudiantesDocente.vue"),
-        },
-
-        {
-          path: "avisos",
-          name: "avisos-docente",
-          component: () => import("../modules/Docente/AvisosDocente.vue"),
         },
 
         {
@@ -219,11 +178,6 @@ const router = createRouter({
       meta: { requiresAuth: true, roles: [ROLES.DIRECTOR] },
 
       children: [
-        {
-          path: "dashboard",
-          name: "dashboard-admin",
-          component: () => import("../modules/Admin/Dashboard.vue"),
-        },
 
         {
           path: "gestion-usuarios",
@@ -260,11 +214,6 @@ const router = createRouter({
           name: "reporte-admin",
           component: () => import("../views/admin/ReportesView.vue"),
         },
-        {
-          path: "constancia",
-          name: "constancia-admin",
-          component: () => import("../modules/Admin/Forms/constancias/egresadoPDF.vue"),
-        },
 
         {
           path: "anios-lectivos",
@@ -295,7 +244,7 @@ const router = createRouter({
 
 // Guardas de navegación. Solo controlan qué pantallas se muestran: la
 // autorización real la hace el backend en cada petición.
-const MOTIVOS_CIERRE = ["sesion_revocada", "cuenta_inactiva", "cuenta_pendiente"];
+const MOTIVOS_CIERRE = ["sesion_revocada"];
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
@@ -305,13 +254,13 @@ router.beforeEach(async (to) => {
     auth.limpiarSesion();
   }
 
-  // Primera navegación con sesión guardada: se confirma con el backend (rol y estado actuales)
+  // Primera navegación con sesión guardada: se confirma con el backend (rol actual)
   let motivo = null;
   if (auth.token && !auth.verificado) {
     try {
       await auth.me();
     } catch (error) {
-      // Se conserva el motivo (contraseña cambiada, cuenta desactivada) para mostrarlo en el login
+      // Se conserva el motivo (contraseña cambiada) para mostrarlo en el login
       const codigo = error?.response?.data?.codigo;
       if (MOTIVOS_CIERRE.includes(codigo)) motivo = codigo;
       auth.limpiarSesion();
@@ -333,6 +282,14 @@ router.beforeEach(async (to) => {
 
   if (to.meta.soloInvitados && auth.autenticado) {
     return auth.rutaInicio;
+  }
+
+  // Encargado: las pantallas dependen del estado de su matrícula (se consulta en cada navegación)
+  if (auth.rol === ROLES.ENCARGADO && to.path.startsWith("/cliente")) {
+    const estado = await useEstadoMatricula().cargar({ forzar: true });
+    const aprobada = estado === "aprobada";
+    if (aprobada && !RUTAS_APROBADA.includes(to.name)) return { name: "inicio-cliente" };
+    if (!aprobada && ["boleta-cliente", "asignaturas-cliente"].includes(to.name)) return { name: "inicio-cliente" };
   }
 
   return true;

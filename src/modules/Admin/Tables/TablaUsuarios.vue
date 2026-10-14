@@ -5,14 +5,13 @@ import FormUser from "../Forms/Usuarios.vue";
 import { usuarioService } from "@/services/usuarioService";
 import { mensajeError } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
-import { ESTADO_ETIQUETAS, ROL_OPCIONES, etiquetaRol } from "@/constants/roles";
+import { ROL_OPCIONES, etiquetaRol } from "@/constants/roles";
 
 const authStore = useAuthStore();
 
 const activeSection = ref("Usuarios");
 const search = ref("");
 const filtroRol = ref("");
-const filtroEstado = ref("");
 const verForm = ref(false);
 const usuarioEditado = ref(null);
 
@@ -27,7 +26,6 @@ const cargarUsuarios = async () => {
     usuarios.value = await usuarioService.listar({
       buscar: search.value.trim(),
       rol: filtroRol.value,
-      estado: filtroEstado.value,
     });
   } catch (error) {
     errorCarga.value = mensajeError(error, "No se pudieron cargar los usuarios");
@@ -36,13 +34,13 @@ const cargarUsuarios = async () => {
   }
 };
 
-// Búsqueda por nombre, correo o DUI en el backend
+// Búsqueda por correo en el backend
 let temporizador = null;
 watch(search, () => {
   clearTimeout(temporizador);
   temporizador = setTimeout(cargarUsuarios, 350);
 });
-watch([filtroRol, filtroEstado], cargarUsuarios);
+watch(filtroRol, cargarUsuarios);
 
 onMounted(cargarUsuarios);
 
@@ -89,19 +87,8 @@ const ejecutar = async (accion, porDefecto) => {
   }
 };
 
-const alternarEstado = async (usuario) => {
-  const nuevo = usuario.estado === "activo" ? "inactivo" : "activo";
-  const verbo = nuevo === "activo" ? "activar" : "desactivar";
-  if (!(await confirmar(`¿Desea ${verbo} la cuenta?`, usuario.email))) return;
-  await ejecutar(() => usuarioService.cambiarEstado(usuario.id, nuevo), "No se pudo cambiar el estado");
-};
-
-const reenviarEnlace = async (usuario) => {
-  await ejecutar(() => usuarioService.reenviarEnlace(usuario.id), "No se pudo reenviar el enlace");
-};
-
 const eliminar = async (usuario) => {
-  if (!(await confirmar("¿Eliminar la cuenta?", "Solo se eliminan cuentas sin información asociada; en otro caso, desactívela."))) return;
+  if (!(await confirmar("¿Eliminar la cuenta?", "Solo se eliminan cuentas sin información asociada."))) return;
   await ejecutar(() => usuarioService.eliminar(usuario.id), "No se pudo eliminar el usuario");
 };
 
@@ -138,18 +125,13 @@ const tabClass = (name) => [
             <input
               v-model="search"
               type="text"
-              placeholder="Buscar por nombre, correo o DUI..."
+              placeholder="Buscar por correo..."
               class="w-full max-w-sm h-11 px-4 border border-slate-300 rounded-lg outline-none focus:border-blue-500"
             />
 
             <select v-model="filtroRol" class="h-11 px-3 border border-slate-300 rounded-lg outline-none focus:border-blue-500">
               <option value="">Todos los roles</option>
               <option v-for="opcion in ROL_OPCIONES" :key="opcion.valor" :value="opcion.valor">{{ opcion.etiqueta }}</option>
-            </select>
-
-            <select v-model="filtroEstado" class="h-11 px-3 border border-slate-300 rounded-lg outline-none focus:border-blue-500">
-              <option value="">Todos los estados</option>
-              <option v-for="(etiqueta, valor) in ESTADO_ETIQUETAS" :key="valor" :value="valor">{{ etiqueta }}</option>
             </select>
 
             <button
@@ -165,22 +147,14 @@ const tabClass = (name) => [
           </div>
 
           <div class="overflow-x-auto">
-            <table class="w-full min-w-[1000px] border-collapse">
+            <table class="w-full min-w-[700px] border-collapse">
               <thead>
                 <tr>
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
-                    Nombre
-                  </th>
-
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
                     Correo
                   </th>
 
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">DUI</th>
-
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Rol</th>
-
-                  <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">Estado</th>
 
                   <th class="text-left bg-slate-100 px-4 py-3 text-slate-600 font-semibold">
                     Acciones
@@ -190,24 +164,16 @@ const tabClass = (name) => [
 
               <tbody>
                 <tr v-if="cargando && !usuarios.length">
-                  <td colspan="6" class="px-4 py-6 text-center text-slate-500">Cargando usuarios...</td>
+                  <td colspan="3" class="px-4 py-6 text-center text-slate-500">Cargando usuarios...</td>
                 </tr>
 
                 <tr v-else-if="!usuarios.length">
-                  <td colspan="6" class="px-4 py-6 text-center text-slate-500">No hay usuarios que coincidan.</td>
+                  <td colspan="3" class="px-4 py-6 text-center text-slate-500">No hay usuarios que coincidan.</td>
                 </tr>
 
                 <tr v-for="usuario in usuarios" :key="usuario.id">
                   <td class="px-4 py-4 border-b border-slate-200">
-                    {{ usuario.nombre || "(sin nombre)" }}
-                  </td>
-
-                  <td class="px-4 py-4 border-b border-slate-200">
                     {{ usuario.email }}
-                  </td>
-
-                  <td class="px-4 py-4 border-b border-slate-200">
-                    {{ usuario.dui || "(sin DUI)" }}
                   </td>
 
                   <td class="px-4 py-4 border-b border-slate-200">
@@ -223,19 +189,6 @@ const tabClass = (name) => [
                     </span>
                   </td>
 
-                  <td class="px-4 py-4 border-b border-slate-200">
-                    <span
-                      class="px-3 py-1 rounded-full text-sm font-medium"
-                      :class="{
-                        'bg-green-100 text-green-700': usuario.estado === 'activo',
-                        'bg-amber-100 text-amber-700': usuario.estado === 'pendiente',
-                        'bg-slate-200 text-slate-600': usuario.estado === 'inactivo',
-                      }"
-                    >
-                      {{ ESTADO_ETIQUETAS[usuario.estado] ?? usuario.estado }}
-                    </span>
-                  </td>
-
                   <td class="px-6 py-4 border-b border-slate-200">
                     <div class="flex justify-center flex-wrap gap-2">
                       <button
@@ -244,25 +197,6 @@ const tabClass = (name) => [
                       >
                         <i class="pi pi-pencil"></i>
                         Editar
-                      </button>
-
-                      <button
-                        v-if="usuario.estado === 'pendiente'"
-                        @click="reenviarEnlace(usuario)"
-                        class="flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500 text-amber-600 hover:bg-amber-500 hover:text-white transition"
-                        title="Reenviar el enlace para definir la contraseña"
-                      >
-                        <i class="pi pi-envelope"></i>
-                        Reenviar enlace
-                      </button>
-
-                      <button
-                        v-else-if="!esPropia(usuario)"
-                        @click="alternarEstado(usuario)"
-                        class="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-500 text-slate-600 hover:bg-slate-500 hover:text-white transition"
-                      >
-                        <i :class="usuario.estado === 'activo' ? 'pi pi-lock' : 'pi pi-lock-open'"></i>
-                        {{ usuario.estado === "activo" ? "Desactivar" : "Activar" }}
                       </button>
 
                       <button

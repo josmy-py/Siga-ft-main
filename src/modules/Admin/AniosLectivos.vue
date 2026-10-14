@@ -10,29 +10,10 @@ const ESTADOS_ANIO = {
   cierre: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
 };
 
-const ESTADOS_PERIODO = {
-  pendiente: { etiqueta: "Pendiente", clase: "bg-amber-100 text-amber-700" },
-  abierto: { etiqueta: "Abierto", clase: "bg-green-100 text-green-700" },
-  cerrado: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
-};
-
-const DIAGNOSTICO = {
-  anios_sin_fechas: "Años lectivos sin fechas",
-  anios_sin_periodos: "Años lectivos sin periodos",
-  periodos_sin_anio: "Periodos anteriores sin año lectivo",
-  secciones_sin_anio: "Secciones sin año lectivo",
-  matriculas_sin_anio: "Matrículas sin año lectivo",
-  matriculas_con_otro_anio_que_su_seccion: "Matrículas con un año distinto al de su sección",
-  padres_sin_estudiantes: "Padres sin estudiantes vinculados (los vincula el director)",
-};
-
 const anios = ref([]);
 const cargando = ref(false);
 const errorCarga = ref(null);
 const seleccionadoId = ref(null);
-
-const diagnostico = ref(null);
-const errorDiagnostico = ref(null);
 
 const ocupado = ref(false);
 
@@ -45,7 +26,6 @@ const edicionPeriodos = ref({});
 const erroresPeriodos = ref({});
 
 const seleccionado = computed(() => anios.value.find((a) => a.id === seleccionadoId.value) ?? null);
-const hayAbierto = computed(() => (seleccionado.value?.periodos ?? []).some((p) => p.estado === "abierto"));
 const ultimoNivel = computed(() => Math.max(0, ...(seleccionado.value?.periodos ?? []).map((p) => p.nivel ?? 0)));
 
 const fecha = (valor) => {
@@ -64,16 +44,6 @@ const prepararPeriodos = () => {
   erroresPeriodos.value = {};
 };
 
-const cargarDiagnostico = async () => {
-  errorDiagnostico.value = null;
-  try {
-    diagnostico.value = await anioLectivoService.diagnostico();
-  } catch (error) {
-    diagnostico.value = null;
-    errorDiagnostico.value = mensajeError(error, "No se pudo obtener el diagnóstico");
-  }
-};
-
 const cargar = async () => {
   cargando.value = true;
   errorCarga.value = null;
@@ -83,7 +53,6 @@ const cargar = async () => {
       seleccionadoId.value = anios.value[0]?.id ?? null;
     }
     prepararPeriodos();
-    await cargarDiagnostico();
   } catch (error) {
     errorCarga.value = mensajeError(error, "No se pudieron cargar los años lectivos");
   } finally {
@@ -176,7 +145,7 @@ const activarAnio = async () => {
 
 const cerrarAnio = async () => {
   const a = seleccionado.value;
-  if (!(await confirmar(`¿Cerrar el año lectivo ${a.nombre}?`, "Todos sus periodos deben estar cerrados. Un año cerrado no puede volver a activarse ni editarse."))) return;
+  if (!(await confirmar(`¿Cerrar el año lectivo ${a.nombre}?`, "Un año cerrado no puede volver a activarse ni editarse, y sus periodos ya no admiten notas ni conducta."))) return;
   await ejecutar(() => anioLectivoService.cerrar(a.id), "No se pudo cerrar el año lectivo");
 };
 
@@ -209,46 +178,10 @@ const guardarPeriodo = async (periodo) => {
   }
 };
 
-const abrirPeriodo = async (periodo) => {
-  if (!(await confirmar(`¿Abrir ${periodo.nombre}?`, "Solo puede haber un periodo abierto por año lectivo."))) return;
-  await ejecutar(() => periodoEscolarService.abrir(periodo.id), "No se pudo abrir el periodo");
-};
-
-const cerrarPeriodo = async (periodo) => {
-  if (!(await confirmar(`¿Cerrar ${periodo.nombre}?`, "Con el periodo cerrado no se podrán registrar notas ni conducta en él."))) return;
-  await ejecutar(() => periodoEscolarService.cerrar(periodo.id), "No se pudo cerrar el periodo");
-};
-
-const reabrirPeriodo = async (periodo) => {
-  const { value: motivo, isConfirmed } = await Swal.fire({
-    icon: "warning",
-    title: `Reabrir ${periodo.nombre}`,
-    text: "Indique el motivo. Quedará registrado en el registro del sistema.",
-    input: "textarea",
-    inputPlaceholder: "Motivo de la reapertura (mínimo 10 caracteres)",
-    showCancelButton: true,
-    confirmButtonText: "Reabrir",
-    cancelButtonText: "Cancelar",
-    inputValidator: (valor) => {
-      const texto = (valor ?? "").trim();
-      if (!texto) return "El motivo es obligatorio.";
-      if (texto.length < 10) return "Describa el motivo con al menos 10 caracteres.";
-      if (texto.length > 500) return "El motivo no debe exceder los 500 caracteres.";
-      return null;
-    },
-  });
-  if (!isConfirmed) return;
-  await ejecutar(() => periodoEscolarService.reabrir(periodo.id, motivo.trim()), "No se pudo reabrir el periodo");
-};
-
 const eliminarPeriodo = async (periodo) => {
-  if (!(await confirmar(`¿Eliminar ${periodo.nombre}?`, "Solo se elimina el último periodo pendiente y sin registros."))) return;
+  if (!(await confirmar(`¿Eliminar ${periodo.nombre}?`, "Solo se elimina el último periodo y si no tiene registros."))) return;
   await ejecutar(() => periodoEscolarService.eliminar(periodo.id), "No se pudo eliminar el periodo");
 };
-
-const totalDiagnostico = computed(() =>
-  diagnostico.value ? Object.keys(DIAGNOSTICO).reduce((suma, clave) => suma + (diagnostico.value[clave]?.length ?? 0), 0) : 0,
-);
 
 const entradaInput = "w-full h-10 px-3 border border-slate-300 rounded-lg outline-none focus:border-blue-500 disabled:bg-slate-100";
 const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transition disabled:opacity-50 disabled:cursor-not-allowed";
@@ -260,7 +193,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
       <header class="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 class="text-4xl font-bold text-slate-900">Años lectivos</h1>
-          <p class="text-slate-500 mt-2">Años lectivos, periodos escolares y sus estados.</p>
+          <p class="text-slate-500 mt-2">Años lectivos y sus periodos escolares.</p>
         </div>
 
         <button
@@ -400,7 +333,6 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                   <tr>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">N.º</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nombre</th>
-                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Estado</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -408,7 +340,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                   <tr v-for="periodo in seleccionado.periodos" :key="periodo.id" class="align-top">
                     <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nivel }}</td>
 
-                    <template v-if="periodo.estado === 'pendiente' && seleccionado.estado !== 'cierre' && edicionPeriodos[periodo.id]">
+                    <template v-if="seleccionado.estado !== 'cierre' && edicionPeriodos[periodo.id]">
                       <td class="px-3 py-3 border-b border-slate-200">
                         <input v-model.trim="edicionPeriodos[periodo.id].nombre" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
                         <span v-if="erroresPeriodos[periodo.id]?.nombre" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre }}</span>
@@ -419,35 +351,17 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                     </template>
 
                     <td class="px-3 py-3 border-b border-slate-200">
-                      <span class="px-3 py-1 rounded-full text-sm font-medium" :class="ESTADOS_PERIODO[periodo.estado]?.clase">
-                        {{ ESTADOS_PERIODO[periodo.estado]?.etiqueta ?? periodo.estado }}
-                      </span>
-                    </td>
-
-                    <td class="px-3 py-3 border-b border-slate-200">
                       <div class="flex flex-wrap gap-2">
-                        <template v-if="periodo.estado === 'pendiente' && seleccionado.estado !== 'cierre'">
+                        <template v-if="seleccionado.estado !== 'cierre'">
                           <button :disabled="ocupado" @click="guardarPeriodo(periodo)"
                             :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                             <i class="pi pi-save"></i> Guardar
-                          </button>
-                          <button v-if="seleccionado.estado === 'activo' && !hayAbierto" :disabled="ocupado" @click="abrirPeriodo(periodo)"
-                            :class="[botonBase, 'border-green-600 text-green-700 hover:bg-green-600 hover:text-white']">
-                            <i class="pi pi-lock-open"></i> Abrir
                           </button>
                           <button v-if="periodo.nivel === ultimoNivel" :disabled="ocupado" @click="eliminarPeriodo(periodo)"
                             :class="[botonBase, 'border-red-500 text-red-600 hover:bg-red-500 hover:text-white']">
                             <i class="pi pi-trash"></i>
                           </button>
                         </template>
-                        <button v-if="periodo.estado === 'abierto'" :disabled="ocupado" @click="cerrarPeriodo(periodo)"
-                          :class="[botonBase, 'border-slate-500 text-slate-700 hover:bg-slate-600 hover:text-white']">
-                          <i class="pi pi-lock"></i> Cerrar
-                        </button>
-                        <button v-if="periodo.estado === 'cerrado' && seleccionado.estado === 'activo' && !hayAbierto" :disabled="ocupado" @click="reabrirPeriodo(periodo)"
-                          :class="[botonBase, 'border-amber-500 text-amber-700 hover:bg-amber-500 hover:text-white']">
-                          <i class="pi pi-replay"></i> Reabrir
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -456,28 +370,13 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             </div>
 
             <p class="text-xs text-slate-500 mt-3">
-              Un periodo solo se abre con el año activo y cuando no hay otro periodo abierto.
+              Las notas y la conducta se registran en los periodos del año activo.
             </p>
           </div>
 
         </section>
       </div>
 
-      <!-- Diagnóstico de datos anteriores a M2.2 -->
-      <section class="bg-white rounded-3xl shadow-xl p-6 mt-6">
-        <h3 class="text-xl font-semibold text-slate-800 mb-2">Datos pendientes de revisión</h3>
-        <p class="text-sm text-slate-500 mb-4">
-          Registros anteriores a los años lectivos que no se asignaron automáticamente. No se modifican desde aquí.
-        </p>
-        <p v-if="errorDiagnostico" class="text-red-600 text-sm">{{ errorDiagnostico }}</p>
-        <p v-else-if="diagnostico && !totalDiagnostico" class="text-green-700 text-sm">No hay datos pendientes de revisión.</p>
-        <ul v-else-if="diagnostico" class="grid md:grid-cols-2 gap-2">
-          <li v-for="(etiqueta, clave) in DIAGNOSTICO" :key="clave" class="flex justify-between p-3 rounded-lg bg-slate-50">
-            <span class="text-sm text-slate-700">{{ etiqueta }}</span>
-            <strong :class="diagnostico[clave]?.length ? 'text-amber-700' : 'text-slate-400'">{{ diagnostico[clave]?.length ?? 0 }}</strong>
-          </li>
-        </ul>
-      </section>
     </main>
   </div>
 </template>

@@ -8,7 +8,7 @@ const emit = defineEmits(["toggle-sidebar"]);
 const authStore = useAuthStore();
 
 const user = computed(() => ({
-  nombre: authStore.user?.nombre || authStore.user?.email || "",
+  nombre: authStore.user?.email || "",
   rol: authStore.etiquetaRol,
 }));
 

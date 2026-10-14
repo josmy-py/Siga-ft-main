@@ -100,7 +100,7 @@ const vistaSecciones = computed(() =>
   secciones.value
     .filter((s) => gradosSeleccionados.value.includes(s.grado_id))
     .map((s) => {
-      const opciones = planes.value.filter((p) => p.grado_id === s.grado_id);
+      const opciones = planes.value;
       const otros = props.asignaciones.filter((a) => a.seccion_id === s.id && a.profesor_id !== Number(filtros.value.profesor));
       const planFijo = otros[0]?.asignatura?.plan_estudio_id ?? null;
       const planMarcado = marcadasEn(s.id)
@@ -352,7 +352,7 @@ const guardarAsignacion = async () => {
 
           <div class="p-5">
             <p v-if="!vista.opciones.length && !vista.materias.length" class="text-sm text-amber-600">
-              {{ vista.seccion.grado?.nombre }} no tiene un plan de estudios vigente. Regístrelo en Catálogos &gt; Planes de estudio.
+              No hay planes de estudio vigentes. Regístrelos en Catálogos &gt; Planes de estudio.
             </p>
             <p v-else-if="!vista.planId" class="text-sm text-slate-500">Elija el plan de estudios de la sección para ver sus materias.</p>
             <p v-else-if="!vista.materias.length" class="text-sm text-amber-600">

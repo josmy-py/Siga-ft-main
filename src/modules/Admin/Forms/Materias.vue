@@ -70,7 +70,7 @@ const guardarMateria = async () => {
             {{ editando ? "Renombrar Materia" : "Nueva Materia" }}
           </h2>
           <p class="text-blue-100">
-            Plan: {{ plan.nombre }} · {{ plan.grado?.nombre ?? "Sin grado" }}{{ plan.especialidad ? ` · ${plan.especialidad.nombre}` : "" }}
+            Plan: {{ plan.nombre }}{{ plan.especialidad ? ` · ${plan.especialidad.nombre}` : "" }}
           </p>
         </div>
 

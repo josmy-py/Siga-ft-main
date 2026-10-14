@@ -1,61 +1,77 @@
-import api from './api';
-import baseService from './baseService';
+import api from './api'
 
-const matriculaCrud = baseService('/matriculas');
-
-const mockCatalogos = {
-    grados: [
-        { id: 1, nombre: "1er Año", especialidad: "Software" },
-        { id: 2, nombre: "2do Año", especialidad: "Software" }
-    ],
-    turnos: [
-        { id: 1, nombre: "Mañana" },
-        { id: 2, nombre: "Tarde" }
-    ],
-    parentescos: [
-        { id: 1, nombre: "Madre" },
-        { id: 2, nombre: "Padre" }
-    ]
-};
-
-const mockBusqueda = [
-    { id: 10, nombres: "Juan Perez", NIE: "12345678", padre: { id: 5, nombre: "Carlos Perez", dui: "00000000-0" } }
-];
-const USE_MOCK = true; 
-
+// M6: matrícula (API real). El encargado llena la solicitud sin sección; la
+// dirección asigna la sección (solo grados permitidos y secciones con cupo) al
+// aprobar. Errores 422 por campo con erroresCampos(), 409 reglas de estado.
 export const matriculaService = {
-    
-    ...matriculaCrud, 
+  // filtros: { estado, ingreso, anio_lectivo_id, grado_id, q } -> { matriculas, resumen }
+  async listar(filtros = {}) {
+    const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== '' && v != null))
+    const { data } = await api.get('/matriculas', { params })
+    return data
+  },
 
-    async obtenerCatalogos() {
-        if (USE_MOCK) {
-            return new Promise(resolve => setTimeout(() => resolve({ 
-                data: mockCatalogos 
-            }), 300));
-        }
-        const [resGrados, resTurnos, resParentescos] = await Promise.all([
-            api.get("/grados"),
-            api.get("/turnos"),
-            api.get("/parentescos")
-        ]);
-        return { data: { grados: resGrados.data, turnos: resTurnos.data, parentescos: resParentescos.data } };
-    },
+  // Expediente completo con responsable y archivos
+  async obtener(id) {
+    const { data } = await api.get(`/matriculas/${id}`)
+    return data
+  },
 
-    async buscarEstudiante(termino) {
-        if (USE_MOCK) {
-            return new Promise(resolve => setTimeout(() => resolve({ data: mockBusqueda }), 500));
-        }
-        const response = await api.get(`/estudiantes/buscar?q=${termino}`);
-        return response;
-    },
+  // { anio_lectivo, ingreso, grados, especialidad_id, especialidad_libre, mensaje, permitido, nie, responsable }
+  async opciones(estudianteId) {
+    const { data } = await api.get(`/matriculas/estudiantes/${estudianteId}/opciones`)
+    return data
+  },
 
-    async enviarMatricula(formData) {
-        if (USE_MOCK) {
-            console.log("Simulando envío a Laravel...");
-            return new Promise(resolve => setTimeout(() => resolve({ data: { message: "Matrícula exitosa" } }), 800));
-        }
-        return await api.post("/matriculas", formData, {
-            headers: { "Content-Type": "multipart/form-data" }
-        });
+  // datos: { ingreso, estudiante_id, nie, especialidad_id, enfermedad_id, discapacidades[], es_trasladado, foto, documento }
+  async solicitar(datos) {
+    const { data } = await api.post('/matriculas', aFormData(datos))
+    return data
+  },
+
+  async cancelar(id) {
+    const { data } = await api.delete(`/matriculas/${id}`)
+    return data
+  },
+
+  // Solo DIRECTOR: { grados: [{ id, nombre, turnos: [{ turno, secciones: [{ id, nombre, capacidad, cupos_disponibles }] }] }], mensaje }
+  async seccionesParaAsignar(id) {
+    const { data } = await api.get(`/matriculas/${id}/secciones`)
+    return data
+  },
+
+  // Solo DIRECTOR
+  // nie: obligatorio si el estudiante no lo tiene (Nuevo ingreso sin traslado); se guarda en estudiantes
+  async aprobar(id, seccionId, nie = null) {
+    const { data } = await api.put(`/matriculas/${id}/estado`, { estado: 'aprobado', seccion_id: seccionId, ...(nie ? { nie } : {}) })
+    return data
+  },
+
+  async rechazar(id) {
+    const { data } = await api.put(`/matriculas/${id}/estado`, { estado: 'rechazado' })
+    return data
+  },
+
+  // Foto o partida desde el disco privado, como URL local para verla
+  async archivo(id, tipo) {
+    const { data } = await api.get(`/matriculas/${id}/archivos/${tipo}`, { responseType: 'blob' })
+    return URL.createObjectURL(data)
+  },
+}
+
+function aFormData(datos) {
+  const form = new FormData()
+  for (const [campo, valor] of Object.entries(datos)) {
+    if (valor === undefined || valor === null || valor === '') continue
+    if (Array.isArray(valor)) {
+      valor.forEach((v) => form.append(`${campo}[]`, v))
+    } else if (typeof valor === 'boolean') {
+      form.append(campo, valor ? '1' : '0')
+    } else {
+      form.append(campo, valor)
     }
-};
+  }
+  return form
+}
+
+export const TURNOS = { matutino: 'Mañana', vespertino: 'Tarde' }

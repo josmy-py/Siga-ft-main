@@ -72,8 +72,8 @@ const eliminar = async (materia) => {
             Materias de {{ plan.nombre }}
           </h2>
           <p class="text-gray-500 text-sm mt-1">
-            {{ plan.grado?.nombre ?? "Sin grado" }}{{ plan.especialidad ? ` · ${plan.especialidad.nombre}` : "" }} ·
-            {{ plan.estado ? "plan vigente: estas materias se podrán asignar a las secciones del grado" : "plan no vigente" }}
+            {{ plan.especialidad ? `${plan.especialidad.nombre} · ` : "" }}
+            {{ plan.estado ? "plan vigente: estas materias se podrán asignar a las secciones" : "plan no vigente" }}
           </p>
         </div>
 

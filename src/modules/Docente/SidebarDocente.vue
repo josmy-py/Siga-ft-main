@@ -62,12 +62,6 @@ const handleNavClick = () => {
 
       <!-- Navegación -->
       <nav class="mt-4 flex flex-col text-sm pb-24">
-        <router-link to="/docente/dashboard" class="menu-item" @click="handleNavClick">
-          <div class="bg-white drop-shadow p-2 rounded-full">
-            <i class="pi pi-home text-blue-500"></i>
-          </div>
-          Inicio
-        </router-link>
 
         <router-link to="/docente/perfil" class="menu-item" @click="handleNavClick">
           <div class="bg-white drop-shadow p-2 rounded-full">
@@ -97,13 +91,6 @@ const handleNavClick = () => {
           Mis Estudiantes
         </router-link>
 
-        <router-link to="/docente/avisos" class="menu-item" @click="handleNavClick">
-          <div class="bg-white drop-shadow p-2 rounded-full">
-            <i class="pi pi-book text-blue-500"></i>
-          </div>
-          Avisos
-        </router-link>
-
         <router-link to="/docente/conducta" class="menu-item" @click="handleNavClick">
           <div class="bg-white drop-shadow p-2 rounded-full">
             <i class="pi pi-star text-blue-500"></i>
@@ -115,7 +102,7 @@ const handleNavClick = () => {
           <div class="bg-white drop-shadow p-2 rounded-full">
             <i class="pi pi-chart-bar text-blue-500"></i>
           </div>
-          Reportes
+          Libreta
         </router-link>
 
         <router-link to="/docente/grados-secciones" class="menu-item" @click="handleNavClick">

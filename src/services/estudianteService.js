@@ -33,9 +33,4 @@ export const estudianteService = {
     return data
   },
 
-  // Solo DIRECTOR (D-E3): pasa el estudiante a otra cuenta ENCARGADO
-  async cambiarCuenta(id, userId) {
-    const { data } = await api.put(`/estudiantes/${id}/cuenta`, { user_id: userId })
-    return data
-  },
 }
