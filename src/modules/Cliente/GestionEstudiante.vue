@@ -113,7 +113,9 @@ const cancelar = async (m) => {
               <div class="flex justify-between">
                 <span class="text-gray-500">Grado y sección</span>
                 <span class="font-medium text-gray-800 text-right">
-                  <template v-if="m.seccion">{{ m.seccion.grado?.nombre }} {{ m.seccion.nombre }}</template>
+                  <!-- Pendiente: grado y turno pedidos; la sección la confirma la dirección -->
+                  <template v-if="m.seccion && m.estado === 'pendiente'">{{ m.seccion.grado?.nombre }} · sección por asignar</template>
+                  <template v-else-if="m.seccion">{{ m.seccion.grado?.nombre }} {{ m.seccion.nombre }}</template>
                   <template v-else>Por asignar (dirección)</template>
                 </span>
               </div>

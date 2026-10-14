@@ -41,15 +41,12 @@ const toggleSubmenu = (titulo) => {
   submenuAbierto.value = submenuAbierto.value === titulo ? null : titulo;
 };
 
-// El menú sigue el estado de la matrícula de la cuenta (lo actualiza la guarda del router):
-// mientras está pendiente (o aún no hay solicitud): Inicio, Registro de Estudiante, Registro
-// de Padres, Solicitud de Matrícula y Mi Perfil; aprobada: Inicio, Mi Perfil, Libreta de Notas y Asignaturas.
 const { estado } = useEstadoMatricula();
 
 const MENU_SOLICITUD = [
   { title: "Inicio", to: "/cliente/inicio", icon: "pi pi-home" },
-  { title: "Registro de Estudiante", to: "/cliente/registro", icon: "pi pi-user-plus" },
   { title: "Registro de Padres", to: "/cliente/padres", icon: "pi pi-users" },
+  { title: "Registro de Estudiante", to: "/cliente/registro", icon: "pi pi-user-plus" },
   { title: "Solicitud de Matrícula", to: "/cliente/matricula", icon: "pi pi-file-plus" },
   { title: "Mi Perfil", to: "/cliente/perfil", icon: "pi pi-user" },
 ];

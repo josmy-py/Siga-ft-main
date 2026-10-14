@@ -42,6 +42,9 @@ onMounted(async () => {
     
     <div class="p-6 space-y-6">
       <div v-if="estado !== 'aprobada'" class="flex flex-wrap gap-3">
+        <button class="px-4 py-2 rounded-lg border hover:bg-gray-100" @click="router.push({ name: 'registro-padres' })">
+          <i class="pi pi-users mr-2"></i>Registrar padres
+        </button>
         <button class="px-4 py-2 rounded-lg border hover:bg-gray-100" @click="router.push({ name: 'registro-cliente' })">
           <i class="pi pi-user-plus mr-2"></i>Registrar estudiante
         </button>

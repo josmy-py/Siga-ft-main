@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch, nextTick } from "vue";
 import Swal from "sweetalert2";
 import { matriculaService, TURNOS } from "@/services/matriculaService";
 import { erroresCampos, mensajeError } from "@/services/api";
@@ -82,6 +82,17 @@ const abrir = async (m) => {
       asignacion.value = await matriculaService.seccionesParaAsignar(m.id);
       // Un solo grado posible (reingreso): queda elegido
       if (asignacion.value.grados.length === 1) gradoId.value = asignacion.value.grados[0].id;
+      // El grado y el turno que pidió el encargado sirven de filtro: quedan elegidos con su sección
+      const pedida = detalle.value.seccion;
+      if (pedida && asignacion.value.grados.some((g) => g.id === pedida.grado_id)) {
+        gradoId.value = pedida.grado_id;
+        await nextTick();
+        if (turnos.value.some((t) => t.turno === pedida.turno)) {
+          turno.value = pedida.turno;
+          await nextTick();
+          if (secciones.value.some((s) => s.id === pedida.id)) seccionId.value = pedida.id;
+        }
+      }
     }
   } catch (e) {
     Swal.fire({ icon: "error", title: mensajeError(e, "No se pudo abrir la matrícula.") });
@@ -202,7 +213,8 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
                 <td class="p-3">{{ m.ingreso }}</td>
                 <td class="p-3">{{ m.anio_lectivo?.nombre || "—" }}</td>
                 <td class="p-3">
-                  <template v-if="m.seccion">{{ m.seccion.grado?.nombre }} {{ m.seccion.nombre }} · {{ TURNOS[m.seccion.turno] }}</template>
+                  <template v-if="m.seccion && m.estado === 'pendiente'">Pide {{ m.seccion.grado?.nombre }} · {{ TURNOS[m.seccion.turno] }}</template>
+                  <template v-else-if="m.seccion">{{ m.seccion.grado?.nombre }} {{ m.seccion.nombre }} · {{ TURNOS[m.seccion.turno] }}</template>
                   <span v-else class="text-amber-600">Sin asignar</span>
                 </td>
                 <td class="p-3">{{ fecha(m.created_at) }}</td>
@@ -262,6 +274,10 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
 
         <div v-else-if="asignacion" class="bg-blue-50 rounded-xl p-4 space-y-3">
           <h3 class="font-semibold text-gray-800">Asignar sección</h3>
+          <p v-if="detalle.seccion" class="text-sm text-gray-700">
+            El encargado pidió <b>{{ detalle.seccion.grado?.nombre }}</b>, turno de la <b>{{ TURNOS[detalle.seccion.turno]?.toLowerCase() }}</b>.
+            Puede confirmar la sección propuesta o cambiarla.
+          </p>
           <p class="text-sm text-gray-600">{{ asignacion.mensaje }}</p>
           <p v-if="!asignacion.grados.length" class="text-sm text-red-600">
             No hay grados con secciones con cupo para este estudiante. Solo puede rechazar o ampliar los cupos en Secciones.

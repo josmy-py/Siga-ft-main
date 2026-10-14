@@ -1,12 +1,15 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api, { erroresCampos, mensajeError } from "../../services/api";
 import { estudianteService } from "../../services/estudianteService";
 import { familiaService } from "../../services/familiaService";
+import { PATRON_NOMBRE, soloLetras } from "./nombres";
 
-// M5: registro y edición del estudiante con la API real. Los padres se eligen de
-// la familia de la cuenta; para agregar uno nuevo se usa la pantalla "Padres".
+// M5: registro y edición del estudiante con la API real. Los padres se registran
+// primero en «Registro de Padres»; aquí se indican por su DUI y la relación
+// (parientes) se crea al guardar al estudiante. El NIE va en la matrícula.
 const props = defineProps({
   estudianteId: { type: Number, default: null },
   // Dirección: edita solo los datos del estudiante; la familia se gestiona en la ficha
@@ -14,16 +17,15 @@ const props = defineProps({
 });
 const emit = defineEmits(["cerrar", "guardado"]);
 
+const router = useRouter();
 const estudiante = ref({
   nombre: "",
-  nie: "",
   fecha_nacimiento: "",
   genero: "",
   distrito_id: null,
   canton: "",
   direccion: "",
 });
-const permisos = ref({ editar_nie: true });
 const vinculados = ref([]);
 const errores = ref({});
 const cargando = ref(true);
@@ -57,26 +59,73 @@ const verificarInputDistrito = () => {
 
 const ocultarDropdown = () => setTimeout(() => (mostrarDropdownDistrito.value = false), 200);
 
-// --- Padres de la familia ---
-const padresFamilia = ref([]);
-const padreDesconocido = ref(false);
-const madreDesconocida = ref(false);
-const padreId = ref(null);
-const madreId = ref(null);
+// --- Padre y madre: se buscan por DUI entre los ya registrados ---
+const nuevoVinculo = (parentesco) => ({ parentesco, dui: "", desconocido: false, encontrado: null, error: "", buscando: false });
+const vinculosNuevos = ref([nuevoVinculo("Padre"), nuevoVinculo("Madre")]);
+
+const buscarPadre = async (v) => {
+  v.encontrado = null;
+  v.error = "";
+  if (!v.dui.trim()) {
+    v.error = "Ingrese el DUI.";
+    return;
+  }
+  v.buscando = true;
+  try {
+    v.encontrado = await familiaService.buscarPadre(v.dui);
+    if (!v.encontrado) v.error = "No hay un padre o una madre registrados con ese DUI. Regístrelo primero en «Registro de Padres».";
+  } catch (e) {
+    v.error = mensajeError(e, "No se pudo buscar el DUI");
+  } finally {
+    v.buscando = false;
+  }
+};
+
+// Edición: agregar padre o madre a un estudiante ya registrado
+const agregado = ref(nuevoVinculo("Padre"));
+const agregarPadre = async () => {
+  agregado.value.error = "";
+  try {
+    const { message } = await familiaService.vincular(props.estudianteId, agregado.value.dui, agregado.value.parentesco);
+    agregado.value = nuevoVinculo("Padre");
+    Swal.fire({ icon: "success", title: message ?? "Vínculo registrado", timer: 2000, showConfirmButton: false });
+    await cargar();
+  } catch (e) {
+    agregado.value.error = Object.values(erroresCampos(e))[0] ?? mensajeError(e, "No se pudo vincular");
+  }
+};
+
+const quitarPadre = async (p) => {
+  const { isConfirmed } = await Swal.fire({
+    icon: "warning",
+    title: "¿Quitar el vínculo?",
+    text: `${p.nombre} dejará de figurar como ${p.pivot.parentesco.toLowerCase()} del estudiante. Sus datos se conservan.`,
+    showCancelButton: true,
+    confirmButtonText: "Sí, quitar",
+    cancelButtonText: "Cancelar",
+  });
+  if (!isConfirmed) return;
+  try {
+    await familiaService.desvincular(props.estudianteId, p.id);
+    await cargar();
+  } catch (e) {
+    Swal.fire({ icon: "warning", title: Object.values(erroresCampos(e))[0] ?? mensajeError(e, "No se pudo quitar el vínculo") });
+  }
+};
 
 const cargar = async () => {
   cargando.value = true;
   try {
-    const [{ data }, padres] = await Promise.all([api.get("/distritos"), props.sinPadres ? [] : familiaService.padres()]);
+    const { data } = await api.get("/distritos");
     todosLosDistritos.value = data.distritos;
-    padresFamilia.value = padres;
 
     if (props.estudianteId) {
       const ficha = await estudianteService.obtener(props.estudianteId);
       const e = ficha.estudiante;
       estudiante.value = {
         nombre: e.nombre,
-        nie: e.nie ?? "",
+        // El NIE se pide en la matrícula; aquí solo lo corrige la dirección
+        ...(props.sinPadres ? { nie: e.nie ?? "" } : {}),
         fecha_nacimiento: e.fecha_nacimiento?.slice(0, 10) ?? "",
         genero: e.genero,
         distrito_id: e.distrito_id,
@@ -84,7 +133,6 @@ const cargar = async () => {
         direccion: e.direccion,
       };
       busquedaDistrito.value = e.distrito?.nombre ?? "";
-      permisos.value = ficha.permisos;
       vinculados.value = e.padres;
     }
   } catch (e) {
@@ -96,10 +144,36 @@ const cargar = async () => {
 
 onMounted(cargar);
 
+// Sin padres registrados y seleccionados no se guarda al estudiante (salvo la dirección)
+const padresElegidos = () => {
+  const activos = vinculosNuevos.value.filter((v) => !v.desconocido);
+  const sinBuscar = activos.filter((v) => !v.encontrado);
+  if (!activos.length || sinBuscar.length) {
+    Swal.fire({
+      icon: "warning",
+      title: "Faltan los padres",
+      text: !activos.length
+        ? "Indique al padre o a la madre del estudiante."
+        : `Busque por DUI al ${sinBuscar.map((v) => v.parentesco.toLowerCase()).join(" y a la ")} o marque que es desconocido(a). Si aún no está registrado(a), regístrelo(a) primero en «Registro de Padres».`,
+      showCancelButton: true,
+      confirmButtonText: "Ir a Registro de Padres",
+      cancelButtonText: "Seguir aquí",
+    }).then(({ isConfirmed }) => isConfirmed && router.push({ name: "registro-padres" }));
+    return null;
+  }
+  return activos.map((v) => ({ dui: v.dui, parentesco: v.parentesco }));
+};
+
 const guardarEstudiante = async () => {
   errores.value = {};
+  const datos = { ...estudiante.value, canton: estudiante.value.canton || null };
+  if ("nie" in datos) datos.nie = datos.nie.trim() || null;
+  if (!props.estudianteId && !props.sinPadres) {
+    const padres = padresElegidos();
+    if (!padres) return;
+    datos.padres = padres;
+  }
   guardando.value = true;
-  const datos = { ...estudiante.value, nie: estudiante.value.nie.trim() || null, canton: estudiante.value.canton || null };
   try {
     if (props.estudianteId) {
       const { message } = await estudianteService.actualizar(props.estudianteId, datos);
@@ -107,22 +181,16 @@ const guardarEstudiante = async () => {
       return;
     }
 
-    const { message, estudiante: creado } = await estudianteService.crear(datos);
-    const pendientes = [];
-    for (const [id, parentesco, omitir] of [[padreId.value, "Padre", padreDesconocido.value], [madreId.value, "Madre", madreDesconocida.value]]) {
-      if (!id || omitir) continue;
-      try {
-        await familiaService.vincularPorId(creado.id, id, parentesco);
-      } catch (e) {
-        pendientes.push(`${parentesco}: ${Object.values(erroresCampos(e))[0] ?? mensajeError(e, "no se pudo vincular")}`);
-      }
-    }
-    if (pendientes.length) {
-      await Swal.fire({ icon: "warning", title: "Estudiante registrado", text: `Revise en "Padres": ${pendientes.join(" ")}` });
-    }
+    const { message } = await estudianteService.crear(datos);
     emit("guardado", message);
   } catch (e) {
     errores.value = erroresCampos(e);
+    // Error en un DUI de la lista «padres»: se muestra junto a ese padre o madre
+    vinculosNuevos.value.filter((v) => !v.desconocido).forEach((v, i) => {
+      const error = errores.value[`padres.${i}.dui`] ?? errores.value[`padres.${i}.parentesco`];
+      if (error) v.error = error;
+    });
+    if (errores.value.padres) Swal.fire({ icon: "warning", title: errores.value.padres });
     if (!Object.keys(errores.value).length) {
       Swal.fire({ icon: e.response?.status === 409 ? "warning" : "error", title: mensajeError(e, "No se pudo guardar el estudiante") });
     }
@@ -147,33 +215,31 @@ const cancelar = () => emit("cerrar");
           Nombre completo
         </label>
         <input
-          v-model="estudiante.nombre"
+          :value="estudiante.nombre"
+          @input="estudiante.nombre = soloLetras($event.target.value); $event.target.value = estudiante.nombre"
           type="text"
           maxlength="80"
+          :pattern="PATRON_NOMBRE"
+          title="Solo letras y espacios"
           class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
           placeholder="Ingrese el nombre completo"
         />
+        <p class="text-xs text-gray-400 mt-1">Solo letras (con tildes y ñ) y espacios.</p>
         <p v-if="errores.nombre" class="text-xs text-red-600 mt-1">{{ errores.nombre }}</p>
       </div>
 
-      <!-- NIE y fecha de nacimiento -->
+      <!-- Fecha de nacimiento (el NIE se pide en la matrícula; solo la dirección lo corrige aquí) -->
       <div class="grid md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
-            NIE <span class="text-gray-400 font-normal">(opcional si aún no lo tiene)</span>
-          </label>
+        <div v-if="'nie' in estudiante">
+          <label class="block text-sm font-medium text-gray-700 mb-1">NIE</label>
           <input
             v-model="estudiante.nie"
             type="text"
             inputmode="numeric"
             maxlength="10"
-            :disabled="!permisos.editar_nie"
-            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-500"
+            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="Solo números"
           />
-          <p v-if="!permisos.editar_nie" class="text-xs text-gray-500 mt-1">
-            Con la matrícula aprobada, solo la dirección puede cambiar el NIE.
-          </p>
           <p v-if="errores.nie" class="text-xs text-red-600 mt-1">{{ errores.nie }}</p>
         </div>
         <div>
@@ -313,81 +379,74 @@ const cancelar = () => emit("cerrar");
 
       <!-- Información de los padres -->
       <div v-if="!sinPadres" class="border-t pt-6 mt-6">
-        <h3 class="text-sm font-semibold text-gray-700 mb-4 flex justify-between items-center">
+        <h3 class="text-sm font-semibold text-gray-700 mb-1 flex justify-between items-center">
           Información de los padres
           <router-link :to="{ name: 'registro-padres' }" class="text-xs text-blue-600 hover:underline font-normal">
-            Registrar padres en "Padres"
+            Ir a «Registro de Padres»
           </router-link>
         </h3>
 
         <!-- Edición: padres ya vinculados -->
-        <div v-if="estudianteId" class="border rounded-xl p-5 bg-gray-50/50 text-sm">
+        <div v-if="estudianteId" class="border rounded-xl p-5 bg-gray-50/50 text-sm space-y-2">
           <p v-if="!vinculados.length" class="text-gray-500">Aún no tiene padres vinculados.</p>
-          <p v-for="p in vinculados" :key="p.id" class="text-gray-700">
-            <span class="font-semibold">{{ p.pivot.parentesco }}:</span> {{ p.nombre }} ({{ p.dui }})
-          </p>
-          <router-link
-            :to="{ name: 'registro-padres', query: { estudiante: estudianteId } }"
-            class="inline-block mt-3 text-blue-600 hover:underline"
-          >
-            Gestionar padres de este estudiante
-          </router-link>
+          <div v-for="p in vinculados" :key="p.id" class="flex justify-between items-center gap-3">
+            <p class="text-gray-700"><span class="font-semibold">{{ p.pivot.parentesco }}:</span> {{ p.nombre }} ({{ p.dui }})</p>
+            <button type="button" @click="quitarPadre(p)" class="text-xs text-red-600 hover:underline">Quitar</button>
+          </div>
+          <div class="pt-3 border-t">
+            <p class="text-gray-600 mb-2">Agregar un padre o una madre ya registrados:</p>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <select v-model="agregado.parentesco" class="px-3 py-2 border rounded-lg bg-white">
+                <option value="Padre">Padre</option>
+                <option value="Madre">Madre</option>
+              </select>
+              <input v-model="agregado.dui" type="text" placeholder="DUI 00000000-0" class="flex-1 px-3 py-2 border rounded-lg" />
+              <button type="button" @click="agregarPadre" :disabled="!agregado.dui.trim()" class="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50">Vincular</button>
+            </div>
+            <p v-if="agregado.error" class="text-xs text-red-600 mt-1">{{ agregado.error }}</p>
+          </div>
         </div>
 
         <template v-else>
-          <!-- Padre -->
-          <div class="border rounded-xl p-5 mb-4 bg-gray-50/50">
+          <p class="text-xs text-gray-500 mb-4">
+            Primero registre al padre y/o a la madre en «Registro de Padres». Aquí escriba su DUI y pulse Buscar;
+            al guardar al estudiante se crea la relación.
+          </p>
+          <div v-for="v in vinculosNuevos" :key="v.parentesco" class="border rounded-xl p-5 mb-4 bg-gray-50/50">
             <div class="flex items-center gap-2 mb-4">
               <input
                 type="checkbox"
-                id="padreDesconocido"
-                v-model="padreDesconocido"
+                :id="`desconocido-${v.parentesco}`"
+                v-model="v.desconocido"
                 class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
               />
-              <label for="padreDesconocido" class="text-sm font-bold text-gray-700 cursor-pointer">
-                Padre desconocido o se registrará después
+              <label :for="`desconocido-${v.parentesco}`" class="text-sm font-bold text-gray-700 cursor-pointer">
+                {{ v.parentesco === "Padre" ? "Padre desconocido o se registrará después" : "Madre desconocida o se registrará después" }}
               </label>
             </div>
 
-            <div v-if="!padreDesconocido" class="animate-fade-in">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Seleccionar Padre
-              </label>
-              <select
-                v-model="padreId"
-                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
-              >
-                <option :value="null">Seleccione un padre de la lista...</option>
-                <option v-for="p in padresFamilia" :key="p.id" :value="p.id">{{ p.nombre }} ({{ p.dui }})</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Madre -->
-          <div class="border rounded-xl p-5 bg-gray-50/50">
-            <div class="flex items-center gap-2 mb-4">
-              <input
-                type="checkbox"
-                id="madreDesconocida"
-                v-model="madreDesconocida"
-                class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-              />
-              <label for="madreDesconocida" class="text-sm font-bold text-gray-700 cursor-pointer">
-                Madre desconocida o se registrará después
-              </label>
-            </div>
-
-            <div v-if="!madreDesconocida" class="animate-fade-in">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Seleccionar Madre
-              </label>
-              <select
-                v-model="madreId"
-                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
-              >
-                <option :value="null">Seleccione una madre de la lista...</option>
-                <option v-for="p in padresFamilia" :key="p.id" :value="p.id">{{ p.nombre }} ({{ p.dui }})</option>
-              </select>
+            <div v-if="!v.desconocido" class="animate-fade-in">
+              <label class="block text-sm font-medium text-gray-700 mb-2">DUI {{ v.parentesco === "Padre" ? "del padre" : "de la madre" }}</label>
+              <div class="flex gap-2">
+                <input
+                  v-model="v.dui"
+                  @input="v.encontrado = null; v.error = ''"
+                  @keydown.enter.prevent="buscarPadre(v)"
+                  type="text"
+                  placeholder="00000000-0"
+                  class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white shadow-sm"
+                />
+                <button type="button" @click="buscarPadre(v)" :disabled="v.buscando" class="px-4 py-2 bg-blue-600 text-white rounded-xl disabled:opacity-50">
+                  {{ v.buscando ? "Buscando..." : "Buscar" }}
+                </button>
+              </div>
+              <p v-if="v.encontrado" class="text-sm text-emerald-700 mt-2">
+                <i class="pi pi-check-circle mr-1"></i>{{ v.encontrado.nombre }}
+              </p>
+              <p v-if="v.error" class="text-xs text-red-600 mt-2">
+                {{ v.error }}
+                <router-link v-if="!v.encontrado" :to="{ name: 'registro-padres' }" class="underline ml-1">Registrar</router-link>
+              </p>
             </div>
           </div>
         </template>

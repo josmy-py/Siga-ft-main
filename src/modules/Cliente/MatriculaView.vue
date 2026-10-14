@@ -9,8 +9,9 @@ import { erroresCampos, mensajeError } from "../../services/api";
 
 // M6: solicitud de matrícula del encargado (API real). Primero se elige el tipo de
 // matrícula (campo `ingreso` de matriculas: Nuevo ingreso o Reingreso) y luego se
-// llena la ficha. La sección la asigna la dirección al revisar la solicitud; el
-// grado y el turno de la ficha muestran solo opciones con cupo.
+// llena la ficha. El grado y el turno elegidos sirven a la dirección para asignar
+// la sección (solo se ofrecen turnos con cupo). El medicamento se escribe aquí pero
+// se guarda en la tabla enfermedades.
 const route = useRoute();
 const router = useRouter();
 
@@ -43,6 +44,7 @@ const form = reactive({
   turno: "",
   especialidad_id: "",
   enfermedad_id: "",
+  medicamento: "",
   discapacidades: [],
   es_trasladado: false,
   foto: null,
@@ -65,7 +67,13 @@ const especialidadFija = computed(() =>
     : null
 );
 const turnosGrado = computed(() => grado.value?.turnos ?? []);
-const medicamento = computed(() => enfermedades.value.find((e) => e.id === form.enfermedad_id)?.medicamento ?? "");
+// Al elegir la enfermedad se propone su medicamento del catálogo; el encargado lo puede escribir
+watch(
+  () => form.enfermedad_id,
+  (id) => {
+    form.medicamento = enfermedades.value.find((e) => e.id === id)?.medicamento ?? "";
+  }
+);
 const discapacidadesElegidas = computed(() => discapacidades.value.filter((d) => form.discapacidades.includes(d.id)));
 const puedeEnviar = computed(
   () => opciones.value?.permitido && !tipoNoCorresponde.value && !responsable.value?.falta && !enviando.value
@@ -108,7 +116,10 @@ watch(
       form.especialidad_id = opciones.value.especialidad_libre ? "" : opciones.value.especialidad_id ?? "";
       if (opciones.value.grados.length === 1) form.grado_id = opciones.value.grados[0].id;
     } catch (e) {
-      errorOpciones.value = Object.values(erroresCampos(e))[0] ?? mensajeError(e, "No se pudo consultar la matrícula del estudiante.");
+      const campos = erroresCampos(e);
+      errorOpciones.value = campos.anio_lectivo_id
+        ? "La dirección aún no ha activado el año lectivo: por ahora no se reciben solicitudes de matrícula."
+        : Object.values(campos)[0] ?? mensajeError(e, "No se pudo consultar la matrícula del estudiante.");
     } finally {
       cargandoOpciones.value = false;
     }
@@ -124,7 +135,7 @@ watch(
 );
 
 // Al corregir un campo se quita su aviso
-for (const campo of ["nie", "grado_id", "turno", "especialidad_id", "enfermedad_id"]) {
+for (const campo of ["nie", "grado_id", "turno", "especialidad_id", "enfermedad_id", "medicamento"]) {
   watch(() => form[campo], () => delete errores.value[campo]);
 }
 
@@ -188,7 +199,10 @@ const enviar = async () => {
       estudiante_id: form.estudiante_id,
       nie: nieEditable.value ? form.nie.trim() : null,
       especialidad_id: esBachillerato.value ? form.especialidad_id : opciones.value.especialidad_id ?? "",
+      grado_id: form.grado_id,
+      turno: form.turno,
       enfermedad_id: form.enfermedad_id,
+      medicamento: form.enfermedad_id ? form.medicamento.trim() : "",
       discapacidades: form.discapacidades,
       es_trasladado: form.es_trasladado,
       foto: form.foto,
@@ -344,12 +358,13 @@ const claseCampo = (campo) =>
                   Solo hay secciones con cupo en el turno de la {{ TURNOS[turnosGrado[0]]?.toLowerCase() }}.
                 </p>
               </div>
-              <div>
+              <!-- Solo en Reingreso: en Nuevo ingreso nunca repite un grado cursado en la institución -->
+              <div v-if="!esNuevo">
                 <label class="block text-sm font-medium text-gray-700 mb-1">¿Repite el grado seleccionado?</label>
                 <input :value="opciones ? (opciones.repite ? 'Sí, debe repetir' : 'No') : ''" disabled placeholder="Según su último año" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-600" />
               </div>
             </div>
-            <p class="text-xs text-gray-500">La sección la asigna la dirección al revisar la solicitud, según el turno y los cupos.</p>
+            <p class="text-xs text-gray-500">El grado y el turno sirven a la dirección para asignar la sección al revisar la solicitud.</p>
 
             <label class="flex items-center gap-2 text-sm text-gray-700">
               <input v-model="form.es_trasladado" type="checkbox" class="w-4 h-4" />
@@ -379,22 +394,24 @@ const claseCampo = (campo) =>
         <div class="border-t pt-6">
           <h2 class="font-semibold text-gray-800">Información de Salud</h2>
           <p class="text-xs text-gray-500 mb-4">Si el estudiante no posee ninguna, deje las opciones en blanco.</p>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="min-w-0">
               <label class="block text-sm font-medium text-gray-700 mb-1">Enfermedad principal</label>
               <select v-model="form.enfermedad_id" :class="claseCampo('enfermedad_id')">
                 <option value="">Ninguna / Seleccione…</option>
                 <option v-for="e in enfermedades" :key="e.id" :value="e.id">{{ e.nombre }}</option>
               </select>
+              <p v-if="errores.enfermedad_id" class="text-red-600 text-xs mt-1">{{ errores.enfermedad_id }}</p>
             </div>
-            <div>
+            <div class="min-w-0">
               <label class="block text-sm font-medium text-gray-700 mb-1">Discapacidades</label>
-              <div class="flex gap-2">
-                <select v-model="discapacidadElegida" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+              <!-- min-w-0 + shrink-0: el botón no se sale de su columna en pantallas medianas -->
+              <div class="flex gap-2 min-w-0">
+                <select v-model="discapacidadElegida" class="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
                   <option value="">Seleccione…</option>
                   <option v-for="d in discapacidades" :key="d.id" :value="d.id" :disabled="form.discapacidades.includes(d.id)">{{ d.nombre }}</option>
                 </select>
-                <button type="button" class="px-4 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700" @click="agregarDiscapacidad">Agregar</button>
+                <button type="button" class="shrink-0 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700" @click="agregarDiscapacidad">Agregar</button>
               </div>
               <div class="flex flex-wrap gap-2 mt-2">
                 <span v-for="d in discapacidadesElegidas" :key="d.id" class="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs">
@@ -403,9 +420,16 @@ const claseCampo = (campo) =>
                 </span>
               </div>
             </div>
-            <div>
+            <div class="min-w-0">
               <label class="block text-sm font-medium text-gray-700 mb-1">Medicamentos frecuentes</label>
-              <input :value="medicamento" disabled placeholder="Según la enfermedad elegida" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-600" />
+              <input
+                v-model="form.medicamento"
+                maxlength="50"
+                :disabled="!form.enfermedad_id"
+                :placeholder="form.enfermedad_id ? 'Escriba el medicamento' : 'Seleccione primero la enfermedad'"
+                :class="[claseCampo('medicamento'), 'disabled:bg-gray-100']"
+              />
+              <p v-if="errores.medicamento" class="text-red-600 text-xs mt-1">{{ errores.medicamento }}</p>
             </div>
           </div>
         </div>

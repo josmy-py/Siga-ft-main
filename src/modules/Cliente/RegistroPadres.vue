@@ -1,39 +1,26 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { onMounted, ref } from "vue";
 import Swal from "sweetalert2";
 import { erroresCampos, mensajeError } from "../../services/api";
-import { estudianteService } from "../../services/estudianteService";
 import { familiaService } from "../../services/familiaService";
+import { PATRON_NOMBRE, soloLetras } from "./nombres";
 
-// M5 (D3): padres y madres de la familia de la cuenta. Una persona por DUI: si ya
-// está en la familia se vincula; si pertenece a otra familia, la dirección autoriza.
-const route = useRoute();
-
-const estudiantes = ref([]);
-const estudianteId = ref(route.query.estudiante ? Number(route.query.estudiante) : null);
+// M5 (D3): los padres y madres se registran primero, sin estudiante. La relación
+// (parientes) se crea al guardar al estudiante, donde se les busca por su DUI;
+// así cada familia solo ve a sus propios registros.
 const padres = ref([]);
 const cargando = ref(true);
 const error = ref("");
-
-const estudiante = computed(() => estudiantes.value.find((e) => e.id === estudianteId.value));
-const vinculoCon = (padre) => padre.estudiantes.find((e) => e.id === estudianteId.value);
-const ordenados = computed(() =>
-  [...padres.value].sort((a, b) => Number(!!vinculoCon(b)) - Number(!!vinculoCon(a)) || a.nombre.localeCompare(b.nombre))
-);
-
 const cuentaConResponsable = ref(false);
 
 const cargar = async () => {
   cargando.value = true;
   error.value = "";
   try {
-    const [lista, familia, perfil] = await Promise.all([estudianteService.listar(), familiaService.padres(), familiaService.perfil()]);
-    estudiantes.value = lista;
+    const [familia, perfil] = await Promise.all([familiaService.padres(), familiaService.perfil()]);
     padres.value = familia;
-    // Un solo responsable por cuenta: con perfil de encargado (o ya registrada como padre) no se marca «Soy yo»
+    // Un solo responsable por cuenta: con perfil de encargado (o ya registrado como padre) no se ofrece
     cuentaConResponsable.value = !!(perfil.encargado || perfil.padre);
-    if (!estudiantes.value.some((e) => e.id === estudianteId.value)) estudianteId.value = estudiantes.value[0]?.id ?? null;
   } catch (e) {
     error.value = mensajeError(e, "No se pudieron cargar los padres.");
   } finally {
@@ -43,43 +30,22 @@ const cargar = async () => {
 
 onMounted(cargar);
 
-const exito = (titulo) => Swal.fire({ icon: "success", title: titulo, timer: 2200, showConfirmButton: false });
+const exito = (titulo, texto) => Swal.fire({ icon: "success", title: titulo, text: texto });
 const primerError = (e, porDefecto) => Object.values(erroresCampos(e))[0] ?? mensajeError(e, porDefecto);
 
-// --- Registro / vínculo ---
+// --- Registro (modal «Nuevo Registro») ---
 const mostrarModal = ref(false);
-const paso = ref("dui"); // dui -> encontrado | nuevo
-const encontrado = ref(null);
 const aviso = ref("");
 const errores = ref({});
 const guardando = ref(false);
-const vacio = () => ({ nombre: "", relacion: "Padre", dui: "", telefono: "", correo: "", esCuenta: false });
+const vacio = () => ({ parentesco: "Padre", nombre: "", dui: "", telefono: "", correo: "", responsable: false });
 const nuevoPadre = ref(vacio());
 
 const abrirRegistro = () => {
   nuevoPadre.value = vacio();
-  const ocupados = new Set(padres.value.map(vinculoCon).filter(Boolean).map((v) => v.pivot.parentesco));
-  if (ocupados.has("Padre") && !ocupados.has("Madre")) nuevoPadre.value.relacion = "Madre";
-  paso.value = "dui";
-  encontrado.value = null;
   aviso.value = "";
   errores.value = {};
   mostrarModal.value = true;
-};
-
-const buscarDui = async () => {
-  errores.value = {};
-  aviso.value = "";
-  if (!nuevoPadre.value.dui.trim()) {
-    errores.value = { dui: "Ingrese el DUI." };
-    return;
-  }
-  try {
-    encontrado.value = await familiaService.buscarPadre(nuevoPadre.value.dui);
-    paso.value = encontrado.value ? "encontrado" : "nuevo";
-  } catch (e) {
-    aviso.value = mensajeError(e, "No se pudo buscar el DUI");
-  }
 };
 
 const guardarPadre = async () => {
@@ -87,32 +53,19 @@ const guardarPadre = async () => {
   aviso.value = "";
   guardando.value = true;
   try {
-    if (paso.value === "encontrado") {
-      await familiaService.vincular(estudianteId.value, nuevoPadre.value.dui, nuevoPadre.value.relacion);
-      exito(`${encontrado.value.nombre} quedó vinculado(a) como ${nuevoPadre.value.relacion.toLowerCase()}`);
-    } else {
-      const { message } = await familiaService.registrarPadre({
-        nombre: nuevoPadre.value.nombre,
-        dui: nuevoPadre.value.dui,
-        telefono: nuevoPadre.value.telefono || null,
-        email: nuevoPadre.value.correo || null,
-        es_encargado: nuevoPadre.value.esCuenta,
-        estudiante_id: estudianteId.value,
-        parentesco: nuevoPadre.value.relacion,
-      });
-      exito(message);
-    }
+    await familiaService.registrarPadre({
+      nombre: nuevoPadre.value.nombre,
+      dui: nuevoPadre.value.dui,
+      telefono: nuevoPadre.value.telefono || null,
+      email: nuevoPadre.value.correo || null,
+      es_responsable: nuevoPadre.value.responsable,
+    });
     mostrarModal.value = false;
+    Swal.fire({ icon: "success", title: "Registro exitoso", timer: 2000, showConfirmButton: false });
     await cargar();
   } catch (e) {
     errores.value = erroresCampos(e);
-    const autorizacion = (errores.value.dui ?? e.response?.data?.message ?? "").includes("dirección");
-    if (autorizacion) {
-      aviso.value = errores.value.dui ?? e.response.data.message;
-      errores.value = {};
-    } else if (!Object.keys(errores.value).length) {
-      aviso.value = mensajeError(e, "No se pudo guardar");
-    }
+    if (!Object.keys(errores.value).length) aviso.value = mensajeError(e, "No se pudo guardar");
   } finally {
     guardando.value = false;
   }
@@ -147,26 +100,24 @@ const guardarEdicion = async () => {
 };
 
 // --- Desvincular (D-E7) ---
-const quitar = async (padre) => {
+const quitar = async (padre, est) => {
   const { isConfirmed } = await Swal.fire({
     icon: "warning",
     title: "¿Quitar el vínculo?",
-    text: `${padre.nombre} dejará de figurar como ${vinculoCon(padre).pivot.parentesco.toLowerCase()} de ${estudiante.value.nombre}. Sus datos se conservan.`,
+    text: `${padre.nombre} dejará de figurar como ${est.pivot.parentesco.toLowerCase()} de ${est.nombre}. Sus datos se conservan.`,
     showCancelButton: true,
     confirmButtonText: "Sí, quitar",
     cancelButtonText: "Cancelar",
   });
   if (!isConfirmed) return;
   try {
-    const { message } = await familiaService.desvincular(estudianteId.value, padre.id);
-    exito(message);
+    const { message } = await familiaService.desvincular(est.id, padre.id);
+    Swal.fire({ icon: "success", title: message, timer: 2200, showConfirmButton: false });
     await cargar();
   } catch (e) {
     Swal.fire({ icon: "warning", title: primerError(e, "No se pudo quitar el vínculo") });
   }
 };
-
-watch(estudianteId, () => (mostrarModal.value = false));
 </script>
 
 <template>
@@ -182,12 +133,11 @@ watch(estudianteId, () => (mostrarModal.value = false));
           <div>
             <h2 class="text-2xl font-bold text-gray-900">Registro de Padres</h2>
             <p class="text-sm text-gray-500 mt-1">
-              Administre la información de los padres de familia
+              Registre primero al padre y/o a la madre; después, al registrar al estudiante, búsquelos por su DUI.
             </p>
           </div>
           <button
             @click="abrirRegistro"
-            :disabled="!estudianteId"
             class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2 shadow-sm shrink-0 disabled:opacity-50"
           >
             <i class="pi pi-user-plus"></i>
@@ -197,29 +147,17 @@ watch(estudianteId, () => (mostrarModal.value = false));
 
         <div v-if="error" class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{{ error }}</div>
 
-        <div v-if="!cargando && !estudiantes.length" class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-          Primero registre a sus estudiantes en
-          <router-link :to="{ name: 'registro-cliente' }" class="underline font-medium">Registro</router-link>.
-        </div>
-
-        <div v-else class="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
-          <label class="text-sm font-medium text-gray-700">Estudiante</label>
-          <select v-model="estudianteId" class="px-4 py-2 border rounded-lg bg-white min-w-72">
-            <option v-for="e in estudiantes" :key="e.id" :value="e.id">{{ e.nombre }}</option>
-          </select>
-        </div>
-
         <!-- Lista de Padres Registrados -->
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-2">
           <div v-if="cargando" class="p-8 text-center text-gray-500">
             <i class="pi pi-spin pi-spinner mr-2"></i>Cargando...
           </div>
           <div v-else-if="padres.length === 0" class="p-8 text-center text-gray-500">
-            No hay padres registrados aún.
+            Aún no hay padres relacionados con sus estudiantes.
           </div>
 
           <div
-            v-for="padre in cargando ? [] : ordenados"
+            v-for="padre in cargando ? [] : padres"
             :key="padre.id"
             class="flex flex-col sm:flex-row sm:items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition border-b border-gray-50 last:border-0 gap-4"
           >
@@ -227,7 +165,7 @@ watch(estudianteId, () => (mostrarModal.value = false));
               <div
                 :class="[
                   'w-12 h-12 rounded-full flex items-center justify-center shrink-0',
-                  vinculoCon(padre) ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400',
+                  padre.estudiantes.length ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400',
                 ]"
               >
                 <i class="pi pi-user text-xl"></i>
@@ -235,26 +173,21 @@ watch(estudianteId, () => (mostrarModal.value = false));
               <div>
                 <h3 class="text-base font-bold text-gray-800">
                   {{ padre.nombre }}
-                  <span v-if="padre.user_id" class="ml-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Titular de una cuenta</span>
+                  <span v-if="padre.user_id" class="ml-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Responsable</span>
                 </h3>
                 <p class="text-xs text-gray-500 mt-0.5">
-                  <template v-if="vinculoCon(padre)">{{ vinculoCon(padre).pivot.parentesco }} • </template>DUI: {{ padre.dui }}
+                  DUI: {{ padre.dui }}
                   <template v-if="padre.telefono"> • Tel. {{ padre.telefono }}</template>
                 </p>
-                <p class="text-xs text-gray-400 mt-0.5">
-                  {{ padre.estudiantes.map((e) => `${e.pivot.parentesco} de ${e.nombre}`).join(" · ") || "Sin estudiantes vinculados" }}
+                <p v-if="!padre.estudiantes.length" class="text-xs text-gray-400 mt-0.5">Sin estudiantes relacionados</p>
+                <p v-for="e in padre.estudiantes" :key="e.id" class="text-xs text-gray-500 mt-0.5">
+                  {{ e.pivot.parentesco }} de {{ e.nombre }}
+                  <button @click="quitar(padre, e)" class="ml-2 text-red-600 hover:underline">Quitar</button>
                 </p>
               </div>
             </div>
 
             <div class="flex gap-2 sm:w-auto w-full">
-              <button
-                v-if="vinculoCon(padre)"
-                @click="quitar(padre)"
-                class="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition flex items-center justify-center gap-2 shadow-sm flex-1"
-              >
-                <i class="pi pi-times text-xs"></i> Quitar
-              </button>
               <button
                 @click="editar(padre)"
                 :disabled="!padre.editable"
@@ -279,78 +212,76 @@ watch(estudianteId, () => (mostrarModal.value = false));
                 <i class="pi pi-times text-xl"></i>
               </button>
             </div>
-            <p class="text-sm text-gray-500 -mt-3 mb-4">Para {{ estudiante?.nombre }}</p>
 
-            <form @submit.prevent="paso === 'dui' ? buscarDui() : guardarPadre()" class="space-y-4">
+            <form @submit.prevent="guardarPadre" class="space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Parentesco</label>
                 <select
-                  v-model="nuevoPadre.relacion"
-                  class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  v-model="nuevoPadre.parentesco"
+                  class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 text-gray-600"
                 >
                   <option value="Padre">Padre</option>
                   <option value="Madre">Madre</option>
                 </select>
-                <p v-if="errores.parentesco" class="text-xs text-red-600 mt-1">{{ errores.parentesco }}</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                <input
+                  :value="nuevoPadre.nombre"
+                  @input="nuevoPadre.nombre = soloLetras($event.target.value); $event.target.value = nuevoPadre.nombre"
+                  type="text"
+                  required
+                  maxlength="80"
+                  :pattern="PATRON_NOMBRE"
+                  title="Solo letras y espacios"
+                  class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <p v-if="errores.nombre" class="text-xs text-red-600 mt-1">{{ errores.nombre }}</p>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">DUI</label>
-                <div class="flex gap-2">
-                  <input
-                    v-model="nuevoPadre.dui"
-                    type="text"
-                    required
-                    :disabled="paso !== 'dui'"
-                    placeholder="00000000-0"
-                    class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
-                  />
-                  <button v-if="paso !== 'dui'" type="button" @click="paso = 'dui'; aviso = ''" class="px-3 text-sm text-blue-600 hover:underline">Cambiar</button>
-                </div>
+                <input
+                  v-model="nuevoPadre.dui"
+                  type="text"
+                  required
+                  placeholder="00000000-0"
+                  class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
                 <p v-if="errores.dui" class="text-xs text-red-600 mt-1">{{ errores.dui }}</p>
               </div>
-
-              <div v-if="paso === 'encontrado'" class="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
-                <i class="pi pi-check-circle mr-1"></i>
-                {{ encontrado.nombre }} ya está registrado(a) en su familia. Se vinculará como {{ nuevoPadre.relacion.toLowerCase() }}.
-              </div>
-
-              <template v-if="paso === 'nuevo'">
+              <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
                   <input
-                    v-model="nuevoPadre.nombre"
+                    v-model="nuevoPadre.telefono"
                     type="text"
-                    required
-                    maxlength="80"
+                    maxlength="15"
                     class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                   />
-                  <p v-if="errores.nombre" class="text-xs text-red-600 mt-1">{{ errores.nombre }}</p>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                    <input
-                      v-model="nuevoPadre.telefono"
-                      type="text"
-                      maxlength="15"
-                      class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Correo</label>
-                    <input
-                      v-model="nuevoPadre.correo"
-                      type="email"
-                      class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                    <p v-if="errores.email" class="text-xs text-red-600 mt-1">{{ errores.email }}</p>
-                  </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Correo</label>
+                  <input
+                    v-model="nuevoPadre.correo"
+                    type="email"
+                    class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <p v-if="errores.email" class="text-xs text-red-600 mt-1">{{ errores.email }}</p>
                 </div>
-                <label v-if="!cuentaConResponsable" class="flex items-center gap-2 text-sm text-gray-700">
-                  <input type="checkbox" v-model="nuevoPadre.esCuenta" class="w-4 h-4" />
-                  Soy yo: esta persona es la titular de esta cuenta
-                </label>
-              </template>
+              </div>
+              <div>
+                <p class="block text-sm font-medium text-gray-700 mb-1">¿Será el responsable del estudiante?</p>
+                <div class="flex gap-6 text-sm">
+                  <label class="flex items-center gap-2"><input type="radio" :value="true" v-model="nuevoPadre.responsable" :disabled="cuentaConResponsable" /> Sí</label>
+                  <label class="flex items-center gap-2"><input type="radio" :value="false" v-model="nuevoPadre.responsable" /> No</label>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                  {{ cuentaConResponsable
+                    ? "Su cuenta ya tiene un responsable registrado."
+                    : "El responsable es la persona titular de esta cuenta." }}
+                </p>
+                <p v-if="errores.es_responsable" class="text-xs text-red-600 mt-1">{{ errores.es_responsable }}</p>
+              </div>
 
               <div v-if="aviso" class="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
                 <i class="pi pi-info-circle mr-1"></i>{{ aviso }}
@@ -369,7 +300,7 @@ watch(estudianteId, () => (mostrarModal.value = false));
                   :disabled="guardando"
                   class="px-5 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium transition disabled:opacity-60"
                 >
-                  {{ paso === "dui" ? "Buscar" : paso === "encontrado" ? "Vincular" : "Guardar" }}
+                  Guardar
                 </button>
               </div>
             </form>
@@ -391,7 +322,7 @@ watch(estudianteId, () => (mostrarModal.value = false));
             <form @submit.prevent="guardarEdicion" class="space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
-                <input v-model="datosEdicion.nombre" type="text" required maxlength="80" class="w-full px-4 py-2 border rounded-lg" />
+                <input :value="datosEdicion.nombre" @input="datosEdicion.nombre = soloLetras($event.target.value); $event.target.value = datosEdicion.nombre" type="text" required maxlength="80" :pattern="PATRON_NOMBRE" class="w-full px-4 py-2 border rounded-lg" />
                 <p v-if="errores.nombre" class="text-xs text-red-600 mt-1">{{ errores.nombre }}</p>
               </div>
               <div>
