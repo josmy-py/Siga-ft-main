@@ -66,13 +66,17 @@ const menuItems = computed(() => {
 
 <template>
   <div>
-    <!-- Overlay móvil -->
-    <div v-if="open" @click="handleNavClick" class="fixed inset-0 bg-black/40 z-30 md:hidden"></div>
+    <!-- Overlay móvil (z-40 para tapar el Navbar) -->
+    <div 
+      v-if="open" 
+      @click="handleNavClick" 
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden transition-opacity"
+    ></div>
 
-    <!-- SIDEBAR -->
+    <!-- SIDEBAR (z-50 para flotar sobre el overlay) -->
     <aside
       :class="[
-        'bg-white text-black min-h-screen transition-all duration-300 fixed inset-y-0 left-0 z-40 flex flex-col shadow-lg shadow-slate-200/60',
+        'bg-white text-black min-h-screen transition-all duration-300 fixed inset-y-0 left-0 z-50 flex flex-col shadow-lg shadow-slate-200/60',
         open ? 'w-64 translate-x-0' : 'w-0 -translate-x-full overflow-hidden',
       ]"
     >
