@@ -62,6 +62,12 @@ export const periodoEscolarService = {
         return response.data;
     },
 
+    // estado: 'pendiente' | 'en_curso' | 'cerrado' (cierre de cada trimestre o periodo)
+    async cambiarEstado(id, estado) {
+        const response = await api.put(`/periodos-escolares/${id}/estado`, { estado });
+        return response.data;
+    },
+
     async eliminar(id) {
         const response = await api.delete(`/periodos-escolares/${id}`);
         return response.data;

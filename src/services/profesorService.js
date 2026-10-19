@@ -1,7 +1,7 @@
 import api from './api'
 
-// Docentes (solo DIRECTOR). Al registrar un docente el backend crea su cuenta
-// DOCENTE y le asigna el código PROF-001, PROF-002...
+// Docentes (solo DIRECTOR). El profesor se vincula con una cuenta DOCENTE ya
+// creada en Usuarios; el backend le asigna el código PROF-001, PROF-002...
 export const profesorService = {
   async listar(buscar = '') {
     const params = buscar ? { buscar } : {}
@@ -14,13 +14,19 @@ export const profesorService = {
     return data.profesor
   },
 
-  // nombre, dui, email, password (si la cuenta es nueva), fecha_nacimiento, telefono y direccion
+  // Cuentas DOCENTE que todavía no tienen profesor
+  async cuentasDisponibles() {
+    const { data } = await api.get('/profesores/cuentas-disponibles')
+    return data.cuentas
+  },
+
+  // nombre, dui, user_id (cuenta DOCENTE), fecha_nacimiento, telefono y direccion
   async crear(datos) {
     const { data } = await api.post('/profesores', datos)
     return data
   },
 
-  // Igual que crear, sin dui ni email: el código, el DUI y la cuenta no se modifican
+  // Igual que crear, sin dui: el código y el DUI no se modifican; la cuenta se puede cambiar
   async actualizar(id, datos) {
     const { data } = await api.put(`/profesores/${id}`, datos)
     return data

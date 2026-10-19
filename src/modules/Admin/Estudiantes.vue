@@ -5,7 +5,7 @@ import { estudianteService } from "../../services/estudianteService";
 import { consultaService } from "../../services/consultaService";
 import ComprobanteMatricula from "../../components/ComprobanteMatricula.vue";
 import { familiaService } from "../../services/familiaService";
-import { erroresCampos, mensajeError } from "../../services/api";
+import { mensajeError } from "../../services/api";
 
 // M5: ficha del estudiante para la dirección (API real): datos, cuenta responsable,
 // padres vinculados, matrículas registradas y acciones exclusivas del director.
@@ -21,11 +21,6 @@ const comprobanteId = ref(null);
 const permisos = ref({});
 const cargando = ref(true);
 const error = ref("");
-
-// D-E4: vínculo autorizado por la dirección
-const vinculo = ref({ dui: "", parentesco: "" });
-const erroresVinculo = ref({});
-const vinculando = ref(false);
 
 const ultima = computed(() => alumno.value?.matriculas?.[0] ?? null);
 const ubicacion = computed(() => {
@@ -56,25 +51,6 @@ onMounted(() => {
 });
 
 const exito = (titulo) => Swal.fire({ icon: "success", title: titulo, timer: 2000, showConfirmButton: false });
-
-const vincular = async () => {
-  vinculando.value = true;
-  erroresVinculo.value = {};
-  try {
-    const { message } = await familiaService.vincular(props.estudianteId, vinculo.value.dui, vinculo.value.parentesco);
-    vinculo.value = { dui: "", parentesco: "" };
-    exito(message);
-    await cargar();
-    emit("cambiado");
-  } catch (e) {
-    erroresVinculo.value = erroresCampos(e);
-    if (!Object.keys(erroresVinculo.value).length) {
-      Swal.fire({ icon: "error", title: mensajeError(e, "No se pudo vincular") });
-    }
-  } finally {
-    vinculando.value = false;
-  }
-};
 
 const quitar = async (padre) => {
   const { isConfirmed } = await Swal.fire({
@@ -196,33 +172,6 @@ const quitar = async (padre) => {
             <p v-if="!alumno.padres?.length" class="text-sm text-gray-500">No tiene padres vinculados.</p>
           </div>
 
-          <!-- D-E4: vínculo autorizado por la dirección -->
-          <form @submit.prevent="vincular" class="mt-5 border-t pt-4">
-            <p class="text-sm text-gray-600 mb-3">
-              Vincular a una persona ya registrada (por ejemplo, de otra familia). Queda en la bitácora como autorización de la dirección.
-            </p>
-            <div class="flex flex-wrap gap-3 items-start">
-              <div>
-                <input v-model="vinculo.dui" placeholder="DUI 00000000-0" class="border p-2 rounded-lg" />
-                <p v-if="erroresVinculo.dui" class="text-xs text-red-600 mt-1 max-w-xs">{{ erroresVinculo.dui }}</p>
-              </div>
-              <div>
-                <select v-model="vinculo.parentesco" class="border p-2 rounded-lg">
-                  <option value="" disabled>Parentesco</option>
-                  <option>Padre</option>
-                  <option>Madre</option>
-                </select>
-                <p v-if="erroresVinculo.parentesco" class="text-xs text-red-600 mt-1 max-w-xs">{{ erroresVinculo.parentesco }}</p>
-              </div>
-              <button
-                type="submit"
-                :disabled="vinculando"
-                class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-              >
-                Vincular por DUI
-              </button>
-            </div>
-          </form>
         </div>
 
         <!-- ENCARGADO Y SALUD (de la última matrícula) -->

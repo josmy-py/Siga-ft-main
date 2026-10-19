@@ -1,12 +1,12 @@
 <script setup>
-import { computed, onMounted, ref, watch, nextTick } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import { matriculaService, TURNOS } from "@/services/matriculaService";
 import { erroresCampos, mensajeError } from "@/services/api";
 
-// M6: revisión de matrículas por la dirección (API real). La dirección asigna
-// la sección: solo grados que permite la promoción y, de cada uno, los turnos
-// y secciones que aún tienen cupo.
+// M6: revisión de matrículas por la dirección (API real). El responsable ya
+// indicó grado y turno en la solicitud: la dirección solo asigna la sección
+// (de ese grado y turno, con cupo).
 const ESTADOS = [
   { valor: "pendiente", texto: "Pendientes", color: "blue" },
   { valor: "aprobado", texto: "Aprobadas", color: "green" },
@@ -23,8 +23,6 @@ const error = ref("");
 const detalle = ref(null);
 const fotoUrl = ref(null);
 const asignacion = ref(null);
-const gradoId = ref("");
-const turno = ref("");
 const seccionId = ref("");
 const errorSeccion = ref("");
 const nie = ref("");
@@ -56,43 +54,43 @@ watch(q, () => {
   espera = setTimeout(cargar, 350);
 });
 
-// Opciones en cascada: grado -> turno -> sección (solo con cupo)
-const grado = computed(() => asignacion.value?.grados.find((g) => g.id === gradoId.value) ?? null);
-const turnos = computed(() => grado.value?.turnos ?? []);
-const secciones = computed(() => turnos.value.find((t) => t.turno === turno.value)?.secciones ?? []);
-
-watch(gradoId, () => {
-  turno.value = turnos.value.length === 1 ? turnos.value[0].turno : "";
-});
-watch(turno, () => {
-  seccionId.value = secciones.value.length === 1 ? secciones.value[0].id : "";
+// Secciones con cupo. Con grado y turno pedidos, el API ya devuelve solo esas;
+// en solicitudes antiguas sin grado ni turno, la opción los indica
+const secciones = computed(() =>
+  (asignacion.value?.grados ?? []).flatMap((g) =>
+    g.turnos.flatMap((t) =>
+      t.secciones.map((s) => ({
+        ...s,
+        texto: detalle.value?.seccion ? s.nombre : `${g.nombre} · ${TURNOS[t.turno] ?? t.turno} · ${s.nombre}`,
+      })),
+    ),
+  ),
+);
+watch(seccionId, () => {
   errorSeccion.value = "";
+});
+
+// Lugar de nacimiento: distrito, municipio y departamento del estudiante
+const lugarNacimiento = computed(() => {
+  const d = detalle.value?.estudiante?.distrito;
+  return d ? `${d.nombre}, ${d.municipio?.nombre}, ${d.municipio?.departamento?.nombre}` : "—";
 });
 
 const abrir = async (m) => {
   try {
     detalle.value = await matriculaService.obtener(m.id);
     asignacion.value = null;
-    gradoId.value = "";
+    seccionId.value = "";
     errorSeccion.value = "";
     nie.value = "";
     errorNie.value = "";
     fotoUrl.value = detalle.value.archivos?.foto ? await matriculaService.archivo(m.id, "foto").catch(() => null) : null;
     if (detalle.value.estado === "pendiente") {
       asignacion.value = await matriculaService.seccionesParaAsignar(m.id);
-      // Un solo grado posible (reingreso): queda elegido
-      if (asignacion.value.grados.length === 1) gradoId.value = asignacion.value.grados[0].id;
-      // El grado y el turno que pidió el encargado sirven de filtro: quedan elegidos con su sección
+      // La sección propuesta al enviar la solicitud queda elegida; si hay una sola, también
       const pedida = detalle.value.seccion;
-      if (pedida && asignacion.value.grados.some((g) => g.id === pedida.grado_id)) {
-        gradoId.value = pedida.grado_id;
-        await nextTick();
-        if (turnos.value.some((t) => t.turno === pedida.turno)) {
-          turno.value = pedida.turno;
-          await nextTick();
-          if (secciones.value.some((s) => s.id === pedida.id)) seccionId.value = pedida.id;
-        }
-      }
+      if (pedida && secciones.value.some((s) => s.id === pedida.id)) seccionId.value = pedida.id;
+      else if (secciones.value.length === 1) seccionId.value = secciones.value[0].id;
     }
   } catch (e) {
     Swal.fire({ icon: "error", title: mensajeError(e, "No se pudo abrir la matrícula.") });
@@ -105,21 +103,13 @@ const cerrar = () => {
   detalle.value = null;
 };
 
-const verDocumento = async () => {
-  try {
-    window.open(await matriculaService.archivo(detalle.value.id, "documento"), "_blank");
-  } catch (e) {
-    Swal.fire({ icon: "error", title: mensajeError(e, "No se pudo abrir el documento.") });
-  }
-};
-
 const aprobar = async () => {
   errorNie.value = "";
   if (pideNie.value && !/^[0-9]{1,10}$/.test(nie.value.trim())) {
     errorNie.value = nie.value.trim() ? "El NIE debe tener solo números (hasta 10 dígitos)." : "Ingrese el NIE del estudiante para aprobar la matrícula.";
   }
   if (!seccionId.value) {
-    errorSeccion.value = "Seleccione grado, turno y sección antes de aprobar.";
+    errorSeccion.value = "Seleccione la sección antes de aprobar.";
   }
   if (errorNie.value || !seccionId.value) return;
   procesando.value = true;
@@ -248,6 +238,11 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
           <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <span><b>NIE:</b> {{ detalle.estudiante?.nie || "—" }}</span>
             <span><b>Nacimiento:</b> {{ detalle.estudiante?.fecha_nacimiento }}</span>
+            <span class="sm:col-span-2"><b>Lugar de nacimiento:</b> {{ lugarNacimiento }}</span>
+            <span class="sm:col-span-2">
+              <b>Dirección:</b> {{ detalle.estudiante?.direccion || "—" }}<template v-if="detalle.estudiante?.canton">, cantón {{ detalle.estudiante.canton }}</template>
+            </span>
+            <span class="sm:col-span-2"><b>Correo:</b> {{ detalle.estudiante?.user?.email || "—" }}</span>
             <span><b>Género:</b> {{ detalle.estudiante?.genero }}</span>
             <span><b>Trasladado:</b> {{ detalle.es_trasladado ? "Sí" : "No" }}</span>
             <span><b>Especialidad:</b> {{ detalle.especialidad?.nombre || "—" }}</span>
@@ -260,9 +255,6 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
               </template>
               <span v-else class="text-red-600">Sin responsable registrado</span>
             </span>
-            <button v-if="detalle.archivos?.documento" class="text-blue-600 underline text-left" @click="verDocumento">
-              Ver partida de nacimiento
-            </button>
           </div>
         </div>
 
@@ -275,37 +267,20 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
         <div v-else-if="asignacion" class="bg-blue-50 rounded-xl p-4 space-y-3">
           <h3 class="font-semibold text-gray-800">Asignar sección</h3>
           <p v-if="detalle.seccion" class="text-sm text-gray-700">
-            El encargado pidió <b>{{ detalle.seccion.grado?.nombre }}</b>, turno de la <b>{{ TURNOS[detalle.seccion.turno]?.toLowerCase() }}</b>.
-            Puede confirmar la sección propuesta o cambiarla.
+            Grado <b>{{ detalle.seccion.grado?.nombre }}</b>, turno <b>{{ TURNOS[detalle.seccion.turno]?.toLowerCase() }}</b> (lo indicó el responsable).
           </p>
-          <p class="text-sm text-gray-600">{{ asignacion.mensaje }}</p>
-          <p v-if="!asignacion.grados.length" class="text-sm text-red-600">
-            No hay grados con secciones con cupo para este estudiante. Solo puede rechazar o ampliar los cupos en Secciones.
+          <p v-else class="text-sm text-gray-600">{{ asignacion.mensaje }}</p>
+          <p v-if="!secciones.length" class="text-sm text-red-600">
+            No hay secciones con cupo para este estudiante. Solo puede rechazar o ampliar los cupos en Secciones.
           </p>
-          <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div>
-              <label class="block font-medium mb-1">Grado</label>
-              <select v-model="gradoId" class="w-full border rounded-lg px-3 py-2">
-                <option value="">Seleccione…</option>
-                <option v-for="g in asignacion.grados" :key="g.id" :value="g.id">{{ g.nombre }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block font-medium mb-1">Turno</label>
-              <select v-model="turno" :disabled="!grado" class="w-full border rounded-lg px-3 py-2">
-                <option value="">Seleccione…</option>
-                <option v-for="t in turnos" :key="t.turno" :value="t.turno">{{ TURNOS[t.turno] ?? t.turno }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block font-medium mb-1">Sección</label>
-              <select v-model="seccionId" :disabled="!turno" class="w-full border rounded-lg px-3 py-2">
-                <option value="">Seleccione…</option>
-                <option v-for="s in secciones" :key="s.id" :value="s.id">
-                  {{ s.nombre }} ({{ s.cupos_disponibles }} de {{ s.capacidad }} cupos)
-                </option>
-              </select>
-            </div>
+          <div v-else class="text-sm md:w-1/2">
+            <label class="block font-medium mb-1">Sección</label>
+            <select v-model="seccionId" class="w-full border rounded-lg px-3 py-2 bg-white">
+              <option value="">Seleccione…</option>
+              <option v-for="s in secciones" :key="s.id" :value="s.id">
+                {{ s.texto }} ({{ s.cupos_disponibles }} de {{ s.capacidad }} cupos)
+              </option>
+            </select>
           </div>
           <p v-if="errorSeccion" class="text-sm text-red-600">{{ errorSeccion }}</p>
           <div v-if="pideNie" class="text-sm md:w-1/3">
@@ -321,7 +296,7 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
             Rechazar
           </button>
           <button
-            :disabled="procesando || !asignacion?.grados.length"
+            :disabled="procesando || !secciones.length"
             class="px-5 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
             @click="aprobar"
           >

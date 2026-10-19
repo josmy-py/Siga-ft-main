@@ -71,7 +71,7 @@ const eliminar = async (profesor) => {
   const { isConfirmed } = await Swal.fire({
     icon: "warning",
     title: "¿Eliminar al profesor?",
-    text: `Se eliminará ${profesor.codigo} y su cuenta. Solo es posible si no tiene secciones ni asignaciones.`,
+    text: `Se eliminará ${profesor.codigo}; su cuenta de usuario se conserva. Solo es posible si no tiene secciones ni asignaciones.`,
     showCancelButton: true,
     confirmButtonText: "Sí, eliminar",
     cancelButtonText: "Cancelar",

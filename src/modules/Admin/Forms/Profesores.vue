@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { profesorService } from "@/services/profesorService";
 import { erroresCampos, mensajeError } from "@/services/api";
 import { duiValido, normalizarDui } from "@/utils/dui";
@@ -17,11 +17,25 @@ const hoy = new Date().toISOString().slice(0, 10);
 const formData = ref({
   nombre: props.profesor?.nombre ?? "",
   dui: props.profesor?.dui ?? "",
-  email: props.profesor?.user?.email ?? "",
+  user_id: props.profesor?.user_id ?? "",
   fecha_nacimiento: props.profesor?.fecha_nacimiento ?? "",
   telefono: props.profesor?.telefono ?? "",
   direccion: props.profesor?.direccion ?? "",
-  password: "",
+});
+
+// Cuentas DOCENTE sin profesor (se crean en Usuarios); al editar se incluye la actual
+const cuentas = ref([]);
+const cargandoCuentas = ref(true);
+onMounted(async () => {
+  try {
+    const libres = await profesorService.cuentasDisponibles();
+    const actual = props.profesor?.user ? [{ id: props.profesor.user.id, email: props.profesor.user.email }] : [];
+    cuentas.value = [...actual, ...libres];
+  } catch (error) {
+    errorGeneral.value = mensajeError(error, "No se pudieron cargar las cuentas de usuario");
+  } finally {
+    cargandoCuentas.value = false;
+  }
 });
 
 const errores = ref({});
@@ -39,10 +53,10 @@ const guardarProfesor = async () => {
 
   guardando.value = true;
   try {
-    const { dui, email, password, ...datos } = formData.value;
+    const { dui, ...datos } = formData.value;
     const respuesta = editando.value
       ? await profesorService.actualizar(props.profesor.id, datos)
-      : await profesorService.crear({ ...datos, email, dui: normalizarDui(dui), ...(password ? { password } : {}) });
+      : await profesorService.crear({ ...datos, dui: normalizarDui(dui) });
 
     emit("guardado", respuesta.message);
   } catch (error) {
@@ -51,7 +65,6 @@ const guardarProfesor = async () => {
       errorGeneral.value = mensajeError(error, "No se pudo guardar el profesor");
     }
   } finally {
-    formData.value.password = "";
     guardando.value = false;
   }
 };
@@ -121,17 +134,16 @@ const claseCampo = (campo, bloqueado = false) => [
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium mb-2">Correo electrónico (cuenta del docente)</label>
-              <input
-                v-model="formData.email"
-                type="email"
-                :required="!editando"
-                :disabled="editando"
-                placeholder="correo@ejemplo.com"
-                :class="claseCampo('email', editando)"
-              />
-              <p v-if="errores.email" class="text-red-600 text-xs mt-1">{{ errores.email }}</p>
-              <p v-else-if="editando" class="text-slate-500 text-xs mt-1">El correo se cambia en la gestión de usuarios.</p>
+              <label class="block text-sm font-medium mb-2">Cuenta de usuario</label>
+              <select v-model="formData.user_id" required :disabled="cargandoCuentas" :class="claseCampo('user_id')">
+                <option value="" disabled>{{ cargandoCuentas ? "Cargando…" : "Seleccione la cuenta del profesor" }}</option>
+                <option v-for="c in cuentas" :key="c.id" :value="c.id">{{ c.email }}</option>
+              </select>
+              <p v-if="errores.user_id" class="text-red-600 text-xs mt-1">{{ errores.user_id }}</p>
+              <p v-else-if="!cargandoCuentas && !cuentas.length" class="text-amber-600 text-xs mt-1">
+                No hay cuentas DOCENTE libres. Cree primero la cuenta en Usuarios.
+              </p>
+              <p v-else class="text-slate-500 text-xs mt-1">Cuentas con rol DOCENTE que aún no tienen profesor.</p>
             </div>
 
             <div>
@@ -161,18 +173,6 @@ const claseCampo = (campo, bloqueado = false) => [
               <p v-if="errores.fecha_nacimiento" class="text-red-600 text-xs mt-1">{{ errores.fecha_nacimiento }}</p>
             </div>
 
-            <div v-if="!editando">
-              <label class="block text-sm font-medium mb-2">Contraseña de la cuenta</label>
-              <input
-                v-model="formData.password"
-                type="password"
-                autocomplete="new-password"
-                placeholder="Mínimo 8 caracteres, letras y números"
-                :class="claseCampo('password')"
-              />
-              <p v-if="errores.password" class="text-red-600 text-xs mt-1">{{ errores.password }}</p>
-              <p v-else class="text-slate-500 text-xs mt-1">Déjela vacía si el correo ya tiene una cuenta DOCENTE.</p>
-            </div>
           </div>
 
           <div>
@@ -189,8 +189,7 @@ const claseCampo = (campo, bloqueado = false) => [
           </div>
 
           <p v-if="!editando" class="text-sm text-slate-500">
-            El código (PROF-001, PROF-002...) se asigna automáticamente. Si el correo no tiene cuenta, se crea
-            la cuenta DOCENTE con la contraseña indicada.
+            El código (PROF-001, PROF-002...) se asigna automáticamente.
           </p>
 
           <div class="flex justify-end gap-3 pt-4 border-t">

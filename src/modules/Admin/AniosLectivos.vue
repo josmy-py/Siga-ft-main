@@ -10,6 +10,13 @@ const ESTADOS_ANIO = {
   cierre: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
 };
 
+// Estado de cada periodo: nace pendiente; el director lo pone en curso y lo cierra al terminar el trimestre
+const ESTADOS_PERIODO = {
+  pendiente: { etiqueta: "Pendiente", clase: "bg-amber-100 text-amber-700" },
+  en_curso: { etiqueta: "En curso", clase: "bg-green-100 text-green-700" },
+  cerrado: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
+};
+
 const anios = ref([]);
 const cargando = ref(false);
 const errorCarga = ref(null);
@@ -206,6 +213,21 @@ const guardarPeriodo = async (periodo) => {
   }
 };
 
+const hayPeriodoEnCurso = computed(() => (seleccionado.value?.periodos ?? []).some((p) => p.estado === "en_curso"));
+
+const CAMBIOS_ESTADO = {
+  en_curso: { pregunta: (p) => `¿Iniciar ${p.nombre_periodo}?`, texto: "Queda en curso: los docentes registran sus notas y conducta." },
+  cerrado: { pregunta: (p) => `¿Cerrar ${p.nombre_periodo}?`, texto: "Ya no se podrán registrar ni modificar notas ni conducta en este periodo." },
+  pendiente: { pregunta: (p) => `¿Volver ${p.nombre_periodo} a pendiente?`, texto: "Úselo si lo inició por error." },
+};
+
+const cambiarEstadoPeriodo = async (periodo, estado) => {
+  const cambio = CAMBIOS_ESTADO[estado];
+  const pregunta = periodo.estado === "cerrado" ? `¿Reabrir ${periodo.nombre_periodo}?` : cambio.pregunta(periodo);
+  if (!(await confirmar(pregunta, cambio.texto))) return;
+  await ejecutar(() => periodoEscolarService.cambiarEstado(periodo.id, estado), "No se pudo cambiar el estado del periodo");
+};
+
 const eliminarPeriodo = async (periodo) => {
   if (!(await confirmar(`¿Eliminar ${periodo.nombre_periodo}?`, "Solo se elimina si no tiene notas ni conducta registradas."))) return;
   await ejecutar(() => periodoEscolarService.eliminar(periodo.id), "No se pudo eliminar el periodo");
@@ -351,8 +373,8 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             </div>
 
             <!-- Formulario de periodo -->
-            <form v-if="formPeriodo" class="grid md:grid-cols-3 gap-4 mb-5 p-4 rounded-2xl border border-blue-200 bg-blue-50/50" @submit.prevent="guardarNuevoPeriodo">
-              <h4 class="md:col-span-3 font-semibold text-slate-700">Nuevo periodo del año {{ seleccionado.anio }}</h4>
+            <form v-if="formPeriodo" class="grid md:grid-cols-4 gap-4 mb-5 p-4 rounded-2xl border border-blue-200 bg-blue-50/50" @submit.prevent="guardarNuevoPeriodo">
+              <h4 class="md:col-span-4 font-semibold text-slate-700">Nuevo periodo del año {{ seleccionado.anio }}</h4>
 
               <label class="text-sm text-slate-600 md:col-span-2">
                 Nombre del periodo
@@ -368,7 +390,13 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                 <span v-if="erroresPeriodo.nivel" class="text-red-600 text-xs">{{ erroresPeriodo.nivel }}</span>
               </label>
 
-              <div class="md:col-span-3 flex gap-3 justify-end">
+              <label class="text-sm text-slate-600">
+                Estado
+                <input value="Pendiente" disabled :class="entradaInput" />
+                <span class="text-slate-500 text-xs">Todo periodo nuevo queda pendiente.</span>
+              </label>
+
+              <div class="md:col-span-4 flex gap-3 justify-end">
                 <button type="button" class="h-10 px-4 rounded-lg border border-slate-300 hover:bg-slate-100" @click="formPeriodo = null">
                   Cancelar
                 </button>
@@ -381,11 +409,12 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             <p v-if="!seleccionado.periodos?.length" class="text-slate-500 text-sm">Este año lectivo no tiene periodos.</p>
 
             <div class="overflow-x-auto">
-              <table v-if="seleccionado.periodos?.length" class="w-full min-w-[560px] border-collapse">
+              <table v-if="seleccionado.periodos?.length" class="w-full min-w-[680px] border-collapse">
                 <thead>
                   <tr>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nivel</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nombre</th>
+                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Estado</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -404,13 +433,37 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                     </template>
 
                     <td class="px-3 py-3 border-b border-slate-200">
+                      <span class="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap" :class="ESTADOS_PERIODO[periodo.estado]?.clase">
+                        {{ ESTADOS_PERIODO[periodo.estado]?.etiqueta ?? periodo.estado }}
+                      </span>
+                    </td>
+
+                    <td class="px-3 py-3 border-b border-slate-200">
                       <div class="flex flex-wrap gap-2">
+                        <!-- Estado: solo con el año activo y un periodo en curso a la vez -->
+                        <template v-if="seleccionado.estado === 'activo'">
+                          <button v-if="periodo.estado !== 'en_curso' && !hayPeriodoEnCurso" :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'en_curso')"
+                            :class="[botonBase, 'border-green-600 text-green-700 hover:bg-green-600 hover:text-white']">
+                            <i :class="periodo.estado === 'cerrado' ? 'pi pi-replay' : 'pi pi-play'"></i>
+                            {{ periodo.estado === "cerrado" ? "Reabrir" : "Iniciar" }}
+                          </button>
+                          <template v-if="periodo.estado === 'en_curso'">
+                            <button :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'cerrado')"
+                              :class="[botonBase, 'border-slate-500 text-slate-700 hover:bg-slate-600 hover:text-white']">
+                              <i class="pi pi-lock"></i> Cerrar
+                            </button>
+                            <button :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'pendiente')" title="Volver a pendiente"
+                              :class="[botonBase, 'border-amber-500 text-amber-700 hover:bg-amber-500 hover:text-white']">
+                              <i class="pi pi-undo"></i>
+                            </button>
+                          </template>
+                        </template>
                         <template v-if="seleccionado.estado !== 'cierre'">
                           <button :disabled="ocupado" @click="guardarPeriodo(periodo)"
                             :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                             <i class="pi pi-save"></i> Guardar
                           </button>
-                          <button :disabled="ocupado" @click="eliminarPeriodo(periodo)"
+                          <button v-if="periodo.estado === 'pendiente'" :disabled="ocupado" @click="eliminarPeriodo(periodo)"
                             :class="[botonBase, 'border-red-500 text-red-600 hover:bg-red-500 hover:text-white']">
                             <i class="pi pi-trash"></i>
                           </button>
@@ -423,7 +476,8 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             </div>
 
             <p class="text-xs text-slate-500 mt-3">
-              Las notas y la conducta se registran en los periodos del año activo.
+              Las notas y la conducta se registran en los periodos del año activo que no estén cerrados.
+              El año lectivo se cierra cuando todos sus periodos están cerrados.
             </p>
           </div>
 
