@@ -221,7 +221,7 @@ const guardarAsignacion = async () => {
             class="hidden md:flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-xl"
           >
             <i class="pi pi-calendar"></i>
-            Año lectivo {{ anio.nombre }}
+            Año lectivo {{ anio.anio }}
           </div>
         </div>
 
@@ -273,7 +273,7 @@ const guardarAsignacion = async () => {
 
         <div class="p-5">
           <p v-if="!grados.length" class="text-sm text-amber-600">
-            No hay secciones en {{ anio.nombre }}. Créelas en Catálogos &gt; Secciones.
+            No hay secciones en {{ anio.anio }}. Créelas en Catálogos &gt; Secciones.
           </p>
           <div class="grid gap-3">
             <label

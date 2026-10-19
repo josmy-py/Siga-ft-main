@@ -21,13 +21,13 @@ export const anioLectivoService = {
         return response.data.anio_lectivo;
     },
 
-    // { nombre, fecha_inicio, fecha_fin, cantidad_periodos? }
+    // { anio, fecha_inicio, fecha_fin }: el año nace sin periodos
     async crear(datos) {
         const response = await api.post('/anios-lectivos', datos);
         return response.data;
     },
 
-    // { nombre, fecha_inicio, fecha_fin }
+    // { anio, fecha_inicio, fecha_fin }
     async actualizar(id, datos) {
         const response = await api.put(`/anios-lectivos/${id}`, datos);
         return response.data;
@@ -48,15 +48,15 @@ export const anioLectivoService = {
         return response.data;
     },
 
-    // { nombre? }
-    async agregarPeriodo(id, datos = {}) {
+    // { nombre_periodo, nivel }
+    async agregarPeriodo(id, datos) {
         const response = await api.post(`/anios-lectivos/${id}/periodos`, datos);
         return response.data;
     }
 };
 
 export const periodoEscolarService = {
-    // { nombre }
+    // { nombre_periodo }
     async actualizar(id, datos) {
         const response = await api.put(`/periodos-escolares/${id}`, datos);
         return response.data;

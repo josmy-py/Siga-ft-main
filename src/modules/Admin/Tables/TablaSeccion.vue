@@ -23,6 +23,9 @@ const seccionEditada = ref(null);
 
 const anioSeleccionado = computed(() => anios.value.find((a) => a.id === Number(filtros.value.anio_lectivo_id)));
 const anioCerrado = computed(() => anioSeleccionado.value?.estado === "cierre");
+// Con un año lectivo activo las secciones solo se consultan (la API también lo impide)
+const anioActivo = computed(() => anios.value.find((a) => a.estado === "activo") ?? null);
+const soloConsulta = computed(() => anioCerrado.value || !!anioActivo.value);
 const aniosAbiertos = computed(() => anios.value.filter((a) => a.estado !== "cierre"));
 const etiquetaTurno = (valor) => TURNOS.find((t) => t.valor === valor)?.etiqueta ?? valor;
 
@@ -124,9 +127,9 @@ const claseOcupacion = (s) =>
 
       <button
         @click="abrirCrear"
-        :disabled="anioCerrado || !aniosAbiertos.length"
+        :disabled="soloConsulta || !aniosAbiertos.length"
         class="ml-auto h-11 px-5 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        :title="anioCerrado ? 'El año lectivo seleccionado está cerrado' : ''"
+        :title="anioActivo ? `Hay un año lectivo activo (${anioActivo.anio})` : anioCerrado ? 'El año lectivo seleccionado está cerrado' : ''"
       >
         + Nueva sección
       </button>
@@ -138,7 +141,7 @@ const claseOcupacion = (s) =>
         <select v-model="filtros.anio_lectivo_id" @change="cargarSecciones" class="w-full h-11 px-3 border border-slate-300 rounded-lg">
           <option v-if="!anios.some((a) => a.estado === 'activo')" value="">Todos los años</option>
           <option v-for="anio in anios" :key="anio.id" :value="anio.id">
-            {{ anio.nombre }}{{ anio.estado === "activo" ? " (activo)" : anio.estado === "cierre" ? " (cerrado)" : "" }}
+            {{ anio.anio }}{{ anio.estado === "activo" ? " (activo)" : anio.estado === "cierre" ? " (cerrado)" : "" }}
           </option>
         </select>
       </div>
@@ -164,8 +167,11 @@ const claseOcupacion = (s) =>
     <div v-else-if="!anios.length && !cargando" class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
       No hay años lectivos. Créelos primero en Años lectivos.
     </div>
+    <div v-else-if="anioActivo" class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+      Hay un año lectivo activo ({{ anioActivo.anio }}): las secciones no se pueden crear, modificar ni eliminar hasta que se cierre.
+    </div>
     <div v-else-if="anioCerrado" class="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-sm">
-      El año lectivo {{ anioSeleccionado.nombre }} está cerrado: sus secciones solo se pueden consultar.
+      El año lectivo {{ anioSeleccionado.anio }} está cerrado: sus secciones solo se pueden consultar.
     </div>
 
     <div class="overflow-x-auto">
@@ -215,7 +221,7 @@ const claseOcupacion = (s) =>
               </span>
             </td>
             <td class="px-4 py-3 border-b border-slate-200">
-              <div v-if="!anioCerrado" class="flex flex-wrap gap-2">
+              <div v-if="!soloConsulta" class="flex flex-wrap gap-2">
                 <button
                   @click="abrirEditar(seccion)"
                   class="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white transition"

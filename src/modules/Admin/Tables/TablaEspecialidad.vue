@@ -5,7 +5,12 @@ import { especialidadService } from "@/services/catalogoService";
 import { mensajeError } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
+const props = defineProps({
+  // Año lectivo activo: sin editar ni eliminar
+  bloqueado: { type: Boolean, default: false },
+});
 const emit = defineEmits(["editar"]);
+const acciones = computed(() => auth.esDirector && !props.bloqueado);
 const auth = useAuthStore();
 
 const Especialidades = ref([]);
@@ -93,17 +98,17 @@ const eliminar = async (especialidad) => {
           <thead class="bg-slate-50">
             <tr>
               <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700">Especialidad</th>
-              <th v-if="auth.esDirector" class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Acciones</th>
+              <th v-if="acciones" class="px-6 py-4 text-center text-sm font-semibold text-gray-700">Acciones</th>
             </tr>
           </thead>
 
           <tbody>
 
             <tr v-if="cargando && !Especialidades.length">
-              <td colspan="2" class="text-center py-6 text-slate-500">Cargando especialidades...</td>
+              <td :colspan="acciones ? 2 : 1" class="text-center py-6 text-slate-500">Cargando especialidades...</td>
             </tr>
             <tr v-else-if="!filtradas.length">
-              <td colspan="2" class="text-center py-6 text-slate-500">
+              <td :colspan="acciones ? 2 : 1" class="text-center py-6 text-slate-500">
                 {{ busqueda ? "Ninguna especialidad coincide con la búsqueda." : "No hay especialidades registradas." }}
               </td>
             </tr>
@@ -123,7 +128,7 @@ const eliminar = async (especialidad) => {
                 </div>
               </td>
 
-              <td v-if="auth.esDirector" class="px-6 py-4">
+              <td v-if="acciones" class="px-6 py-4">
                 <div class="flex justify-center gap-3">
                   <button
                     @click="emit('editar', especialidad)"

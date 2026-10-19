@@ -141,7 +141,7 @@ const familia = (hijo) => router.push({ name: "registro-padres", query: { estudi
                     · NIE: {{ hijo.nie || "pendiente" }}
                     · {{ hijo.padres_count }} padre(s)/madre(s)
                     <span v-if="hijo.ultima_matricula">
-                      · Matrícula {{ hijo.ultima_matricula.anio_lectivo?.nombre }}: {{ hijo.ultima_matricula.estado }}
+                      · Matrícula {{ hijo.ultima_matricula.anio_lectivo?.anio }}: {{ hijo.ultima_matricula.estado }}
                     </span>
                   </p>
                 </div>

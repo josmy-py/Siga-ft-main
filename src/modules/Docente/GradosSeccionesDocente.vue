@@ -44,7 +44,7 @@ onMounted(cargar);
           <h2 class="text-lg font-semibold text-gray-700 mb-2">Grados y Secciones Asignados</h2>
           <p class="text-sm text-gray-500">
             Información de grados a cargo del docente<span v-if="carga?.anio_lectivo">
-              - Año lectivo {{ carga.anio_lectivo.nombre }}</span
+              - Año lectivo {{ carga.anio_lectivo.anio }}</span
             >
           </p>
         </section>

@@ -229,7 +229,7 @@ const irPadres = () => router.push({ name: "registro-padres" });
                     <i class="pi pi-book mr-2"></i>
                     <template v-if="hijo.ultima_matricula?.seccion">
                       {{ hijo.ultima_matricula.seccion.grado?.nombre }} - Sección {{ hijo.ultima_matricula.seccion.nombre }}
-                      ({{ hijo.ultima_matricula.anio_lectivo?.nombre }}, matrícula {{ hijo.ultima_matricula.estado }})
+                      ({{ hijo.ultima_matricula.anio_lectivo?.anio }}, matrícula {{ hijo.ultima_matricula.estado }})
                     </template>
                     <template v-else>Sin matrícula</template>
                   </p>

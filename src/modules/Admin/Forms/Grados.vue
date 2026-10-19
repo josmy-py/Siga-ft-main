@@ -11,8 +11,9 @@ const props = defineProps({
 
 const emit = defineEmits(["guardado", "cancelar"]);
 
-// El diagrama solo tiene "nombre". El nombre se elige del catálogo oficial de
-// grados y cada uno tiene su orden fijo para la promoción (lo da la API).
+// El diagrama solo tiene "nombre" y se escribe como texto. La API lo compara con
+// el catálogo oficial (sin importar mayúsculas ni tildes), porque cada grado
+// tiene su orden fijo para la promoción, y no admite grados repetidos.
 const Grados = ref({
   nombre: ""
 });
@@ -24,8 +25,6 @@ const errorGeneral = ref(null);
 const guardando = ref(false);
 
 const registrados = computed(() => catalogo.value.filter((g) => g.grado_id !== null).length);
-// Al editar, el nombre actual del grado sigue disponible
-const ocupado = (g) => g.grado_id !== null && g.grado_id !== props.grado?.id;
 
 const cargarCatalogo = async () => {
   try {
@@ -109,22 +108,15 @@ const guardarGrado = async () => {
 
             <i class="pi pi-book absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
 
-            <select
-              v-model="Grados.nombre"
+            <input
+              v-model.trim="Grados.nombre"
+              type="text"
+              maxlength="50"
               required
+              placeholder="Ej.: Primer grado"
               :class="errores.nombre ? 'border-red-400' : 'border-gray-200'"
               class="w-full pl-12 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-gray-300 focus:border-transparent outline-none transition bg-white"
-            >
-              <option value="" disabled>Selecciona un grado</option>
-              <option
-                v-for="g in catalogo"
-                :key="g.nombre"
-                :value="g.nombre"
-                :disabled="ocupado(g)"
-              >
-                {{ g.nombre }}{{ ocupado(g) ? " (ya registrado)" : "" }}
-              </option>
-            </select>
+            />
 
           </div>
 
@@ -133,7 +125,7 @@ const guardarGrado = async () => {
             El nombre define el orden de promoción: solo se puede cambiar si el grado aún no tiene secciones ni planes de estudio.
           </p>
           <p v-else class="text-xs text-gray-500">
-            Solo se admiten los grados oficiales; así se sabe a qué grado pasa el estudiante que aprueba.
+            Escriba el nombre oficial del grado (por ejemplo «Parvularia 4 años», «Primer grado» o «Primer año de bachillerato»). No se admiten grados repetidos.
           </p>
 
         </div>

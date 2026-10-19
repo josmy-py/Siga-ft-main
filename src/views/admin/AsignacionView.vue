@@ -134,7 +134,7 @@ const etiquetaSeccion = (a) => `${a.seccion?.grado?.nombre ?? ""} ${a.seccion?.n
             <label class="text-sm font-medium text-slate-600">Año lectivo</label>
             <select v-model="anioId" @change="cargarAsignaciones" class="h-11 px-3 border border-slate-300 rounded-xl bg-white">
               <option v-for="anio in anios" :key="anio.id" :value="anio.id">
-                {{ anio.nombre }}{{ anio.estado === "activo" ? " (activo)" : anio.estado === "cierre" ? " (cerrado)" : " (inactivo)" }}
+                {{ anio.anio }}{{ anio.estado === "activo" ? " (activo)" : anio.estado === "cierre" ? " (cerrado)" : " (inactivo)" }}
               </option>
             </select>
           </div>

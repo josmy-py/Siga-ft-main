@@ -6,20 +6,21 @@ import RegistroCliente from "@/modules/Cliente/RegistroCliente.vue";
 import { estudianteService } from "@/services/estudianteService";
 import { mensajeError } from "@/services/api";
 
-// M5: listado real de estudiantes para la dirección, con búsqueda por nombre o NIE.
+// Estudiantes de la dirección (19/10/2026): solo los que tienen una matrícula
+// aprobada y por eso están activos. Los inscritos (registrados por el encargado
+// sin matrícula aprobada) se atienden desde Matrículas. Búsqueda por nombre o NIE.
 const estudiantes = ref([]);
 const cargando = ref(true);
 const error = ref("");
 
 const search = ref("");
-const estado = ref("");
 
 const fichaId = ref(null);
 const edicionId = ref(null);
 
 const etiquetaEstado = {
-  inscrito: "Registrado",
-  activo: "Matriculado",
+  inscrito: "Inscrito",
+  activo: "Activo",
   inactivo: "Inactivo",
   egresado: "Egresado",
   graduado: "Graduado",
@@ -29,7 +30,7 @@ const cargar = async () => {
   cargando.value = true;
   error.value = "";
   try {
-    estudiantes.value = await estudianteService.listar({ q: search.value.trim(), estado: estado.value });
+    estudiantes.value = await estudianteService.listar({ q: search.value.trim(), estado: "activo", con_matricula_aprobada: 1 });
   } catch (e) {
     error.value = mensajeError(e, "No se pudieron cargar los estudiantes.");
   } finally {
@@ -41,7 +42,6 @@ onMounted(cargar);
 
 const limpiar = () => {
   search.value = "";
-  estado.value = "";
   cargar();
 };
 
@@ -51,24 +51,6 @@ const guardado = async (mensaje) => {
   await cargar();
 };
 
-const eliminar = async (est) => {
-  const { isConfirmed } = await Swal.fire({
-    icon: "warning",
-    title: "¿Eliminar el registro?",
-    text: `Se eliminará a ${est.nombre} y sus vínculos con padres. Solo es posible si no tiene matrículas.`,
-    showCancelButton: true,
-    confirmButtonText: "Sí, eliminar",
-    cancelButtonText: "Cancelar",
-  });
-  if (!isConfirmed) return;
-  try {
-    const { message } = await estudianteService.eliminar(est.id);
-    Swal.fire({ icon: "success", title: message, timer: 2000, showConfirmButton: false });
-    await cargar();
-  } catch (e) {
-    Swal.fire({ icon: "error", title: mensajeError(e, "No se pudo eliminar") });
-  }
-};
 </script>
 
 <template>
@@ -84,7 +66,8 @@ const eliminar = async (est) => {
 
       <div class="p-4 lg:p-6">
         <section class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-          <h2 class="text-lg font-semibold text-gray-700 mb-4">Listado de Estudiantes</h2>
+          <h2 class="text-lg font-semibold text-gray-700">Listado de Estudiantes</h2>
+          <p class="text-sm text-gray-500 mb-4">Estudiantes activos: con una matrícula aprobada.</p>
 
           <form class="flex flex-wrap gap-3 mb-5" @submit.prevent="cargar">
             <input
@@ -93,11 +76,6 @@ const eliminar = async (est) => {
               placeholder="Buscar por nombre o NIE"
               class="flex-1 min-w-[220px] px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
-
-            <select v-model="estado" class="px-3 py-2 border rounded-lg">
-              <option value="">Todos los estados</option>
-              <option v-for="(texto, valor) in etiquetaEstado" :key="valor" :value="valor">{{ texto }}</option>
-            </select>
 
             <button type="submit" class="bg-blue-600 border border-transparent hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
               Buscar
@@ -134,14 +112,14 @@ const eliminar = async (est) => {
                   <td colspan="8" class="p-6 text-center text-gray-500"><i class="pi pi-spin pi-spinner mr-2"></i>Cargando...</td>
                 </tr>
                 <tr v-else-if="!estudiantes.length">
-                  <td colspan="8" class="p-6 text-center text-gray-500">No se encontraron estudiantes.</td>
+                  <td colspan="8" class="p-6 text-center text-gray-500">No hay estudiantes activos con estos datos.</td>
                 </tr>
                 <tr v-for="est in cargando ? [] : estudiantes" :key="est.id" class="border-t hover:bg-gray-50">
                   <td class="p-3">{{ est.nombre }}</td>
                   <td class="p-3">{{ est.nie || "—" }}</td>
                   <td class="p-3 text-sm">{{ est.user?.email || "—" }}</td>
                   <td class="p-3">{{ etiquetaEstado[est.estado] ?? est.estado }}</td>
-                  <td class="p-3">{{ est.ultima_matricula?.anio_lectivo?.nombre || "—" }}</td>
+                  <td class="p-3">{{ est.ultima_matricula?.anio_lectivo?.anio || "—" }}</td>
                   <td class="p-3">{{ est.ultima_matricula?.seccion?.grado?.nombre || "—" }}</td>
                   <td class="p-3">{{ est.ultima_matricula?.seccion?.nombre || "—" }}</td>
 
@@ -163,15 +141,6 @@ const eliminar = async (est) => {
                         Editar
                       </button>
 
-                      <button
-                        :disabled="est.matriculas_count > 0"
-                        :title="est.matriculas_count > 0 ? 'Tiene matrículas registradas' : ''"
-                        @click="eliminar(est)"
-                        class="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500 text-red-600 hover:bg-red-500 hover:text-white transition disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-red-600"
-                      >
-                        <i class="pi pi-trash"></i>
-                        Eliminar
-                      </button>
                     </div>
                   </td>
                 </tr>

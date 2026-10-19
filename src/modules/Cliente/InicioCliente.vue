@@ -67,7 +67,7 @@ onMounted(async () => {
               class="px-3 py-1 rounded-full text-xs font-semibold"
               :class="ESTADOS[hijo.ultima_matricula.estado]?.clase"
             >
-              Matrícula {{ hijo.ultima_matricula.anio_lectivo?.nombre }}: {{ ESTADOS[hijo.ultima_matricula.estado]?.texto }}
+              Matrícula {{ hijo.ultima_matricula.anio_lectivo?.anio }}: {{ ESTADOS[hijo.ultima_matricula.estado]?.texto }}
             </span>
             <span v-else class="text-gray-500">Sin solicitud de matrícula</span>
           </div>

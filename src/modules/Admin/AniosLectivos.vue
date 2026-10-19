@@ -25,8 +25,16 @@ const erroresAnio = ref({});
 const edicionPeriodos = ref({});
 const erroresPeriodos = ref({});
 
+// Formulario "Agregar periodo": campos del diagrama (nombre_periodo y nivel)
+const MAX_PERIODOS = 6;
+const formPeriodo = ref(null);
+const erroresPeriodo = ref({});
+
 const seleccionado = computed(() => anios.value.find((a) => a.id === seleccionadoId.value) ?? null);
-const ultimoNivel = computed(() => Math.max(0, ...(seleccionado.value?.periodos ?? []).map((p) => p.nivel ?? 0)));
+const nivelesUsados = computed(() => (seleccionado.value?.periodos ?? []).map((p) => p.nivel));
+const nivelesLibres = computed(() =>
+  Array.from({ length: MAX_PERIODOS }, (_, i) => i + 1).filter((n) => !nivelesUsados.value.includes(n)),
+);
 
 const fecha = (valor) => {
   if (!valor) return "Sin fecha";
@@ -38,7 +46,7 @@ const prepararPeriodos = () => {
   edicionPeriodos.value = Object.fromEntries(
     (seleccionado.value?.periodos ?? []).map((p) => [
       p.id,
-      { nombre: p.nombre ?? "" },
+      { nombre_periodo: p.nombre_periodo ?? "" },
     ]),
   );
   erroresPeriodos.value = {};
@@ -65,6 +73,7 @@ onMounted(cargar);
 const seleccionar = (anio) => {
   seleccionadoId.value = anio.id;
   formAnio.value = null;
+  formPeriodo.value = null;
   prepararPeriodos();
 };
 
@@ -103,15 +112,15 @@ const ejecutar = async (accion, porDefecto) => {
 
 // ---------- Años lectivos ----------
 
+// El año lectivo se identifica por su año (campo "anio" del diagrama); los periodos se agregan después
 const nuevoAnio = () => {
-  const siguiente = String(new Date().getFullYear() + 1);
-  formAnio.value = { id: null, nombre: siguiente, fecha_inicio: "", fecha_fin: "", cantidad_periodos: 3 };
+  formAnio.value = { id: null, anio: new Date().getFullYear() + 1, fecha_inicio: "", fecha_fin: "" };
   erroresAnio.value = {};
 };
 
 const editarAnio = () => {
   const a = seleccionado.value;
-  formAnio.value = { id: a.id, nombre: a.nombre, fecha_inicio: a.fecha_inicio ?? "", fecha_fin: a.fecha_fin ?? "" };
+  formAnio.value = { id: a.id, anio: a.anio, fecha_inicio: a.fecha_inicio ?? "", fecha_fin: a.fecha_fin ?? "" };
   erroresAnio.value = {};
 };
 
@@ -119,7 +128,6 @@ const guardarAnio = async () => {
   const datos = { ...formAnio.value };
   const id = datos.id;
   delete datos.id;
-  if (id) delete datos.cantidad_periodos;
 
   ocupado.value = true;
   erroresAnio.value = {};
@@ -139,26 +147,46 @@ const guardarAnio = async () => {
 
 const activarAnio = async () => {
   const a = seleccionado.value;
-  if (!(await confirmar(`¿Activar el año lectivo ${a.nombre}?`, "Solo puede haber un año activo a la vez."))) return;
+  if (!(await confirmar(`¿Activar el año lectivo ${a.anio}?`, "Solo puede haber un año activo a la vez."))) return;
   await ejecutar(() => anioLectivoService.activar(a.id), "No se pudo activar el año lectivo");
 };
 
 const cerrarAnio = async () => {
   const a = seleccionado.value;
-  if (!(await confirmar(`¿Cerrar el año lectivo ${a.nombre}?`, "Un año cerrado no puede volver a activarse ni editarse, y sus periodos ya no admiten notas ni conducta."))) return;
+  if (!(await confirmar(`¿Cerrar el año lectivo ${a.anio}?`, "Un año cerrado no puede volver a activarse ni editarse, y sus periodos ya no admiten notas ni conducta."))) return;
   await ejecutar(() => anioLectivoService.cerrar(a.id), "No se pudo cerrar el año lectivo");
 };
 
 const eliminarAnio = async () => {
   const a = seleccionado.value;
-  if (!(await confirmar(`¿Eliminar el año lectivo ${a.nombre}?`, "Solo se eliminan años inactivos sin secciones, matrículas ni registros académicos."))) return;
+  if (!(await confirmar(`¿Eliminar el año lectivo ${a.anio}?`, "Solo se eliminan años inactivos sin secciones, matrículas ni registros académicos."))) return;
   await ejecutar(() => anioLectivoService.eliminar(a.id), "No se pudo eliminar el año lectivo");
 };
 
 // ---------- Periodos ----------
 
-const agregarPeriodo = async () => {
-  await ejecutar(() => anioLectivoService.agregarPeriodo(seleccionado.value.id), "No se pudo agregar el periodo");
+const NOMBRES_SUGERIDOS = ["Primer trimestre", "Segundo trimestre", "Tercer trimestre", "Cuarto periodo", "Quinto periodo", "Sexto periodo"];
+
+const abrirFormPeriodo = () => {
+  const nivel = nivelesLibres.value[0] ?? 1;
+  formPeriodo.value = { nombre_periodo: NOMBRES_SUGERIDOS[nivel - 1] ?? "", nivel };
+  erroresPeriodo.value = {};
+};
+
+const guardarNuevoPeriodo = async () => {
+  ocupado.value = true;
+  erroresPeriodo.value = {};
+  try {
+    const { message } = await anioLectivoService.agregarPeriodo(seleccionado.value.id, { ...formPeriodo.value });
+    formPeriodo.value = null;
+    await cargar();
+    exito(message);
+  } catch (error) {
+    erroresPeriodo.value = erroresCampos(error);
+    fallo(error, "No se pudo agregar el periodo");
+  } finally {
+    ocupado.value = false;
+  }
 };
 
 const guardarPeriodo = async (periodo) => {
@@ -179,7 +207,7 @@ const guardarPeriodo = async (periodo) => {
 };
 
 const eliminarPeriodo = async (periodo) => {
-  if (!(await confirmar(`¿Eliminar ${periodo.nombre}?`, "Solo se elimina el último periodo y si no tiene registros."))) return;
+  if (!(await confirmar(`¿Eliminar ${periodo.nombre_periodo}?`, "Solo se elimina si no tiene notas ni conducta registradas."))) return;
   await ejecutar(() => periodoEscolarService.eliminar(periodo.id), "No se pudo eliminar el periodo");
 };
 
@@ -213,14 +241,14 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
       <!-- Formulario de año -->
       <section v-if="formAnio" class="bg-white rounded-3xl shadow-xl p-6 mb-6">
         <h2 class="text-xl font-semibold text-slate-800 mb-4">
-          {{ formAnio.id ? `Editar año lectivo ${seleccionado?.nombre}` : "Nuevo año lectivo" }}
+          {{ formAnio.id ? `Editar año lectivo ${seleccionado?.anio}` : "Nuevo año lectivo" }}
         </h2>
 
-        <form class="grid md:grid-cols-4 gap-4" @submit.prevent="guardarAnio">
+        <form class="grid md:grid-cols-3 gap-4" @submit.prevent="guardarAnio">
           <label class="text-sm text-slate-600">
-            Nombre
-            <input v-model.trim="formAnio.nombre" maxlength="50" :class="entradaInput" required />
-            <span v-if="erroresAnio.nombre" class="text-red-600 text-xs">{{ erroresAnio.nombre }}</span>
+            Año
+            <input v-model.number="formAnio.anio" type="number" min="2000" max="2100" step="1" placeholder="2027" :class="entradaInput" required />
+            <span v-if="erroresAnio.anio" class="text-red-600 text-xs">{{ erroresAnio.anio }}</span>
           </label>
 
           <label class="text-sm text-slate-600">
@@ -235,13 +263,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             <span v-if="erroresAnio.fecha_fin" class="text-red-600 text-xs">{{ erroresAnio.fecha_fin }}</span>
           </label>
 
-          <label v-if="!formAnio.id" class="text-sm text-slate-600">
-            Cantidad de periodos
-            <input v-model.number="formAnio.cantidad_periodos" type="number" min="1" max="6" :class="entradaInput" />
-            <span v-if="erroresAnio.cantidad_periodos" class="text-red-600 text-xs">{{ erroresAnio.cantidad_periodos }}</span>
-          </label>
-
-          <div class="md:col-span-4 flex gap-3 justify-end">
+          <div class="md:col-span-3 flex gap-3 justify-end">
             <button type="button" class="h-10 px-4 rounded-lg border border-slate-300 hover:bg-slate-100" @click="formAnio = null">
               Cancelar
             </button>
@@ -268,7 +290,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             :class="anio.id === seleccionadoId ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-slate-50'"
           >
             <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold text-slate-800">{{ anio.nombre }}</span>
+              <span class="font-semibold text-slate-800">{{ anio.anio }}</span>
               <span class="px-2 py-0.5 rounded-full text-xs font-medium" :class="ESTADOS_ANIO[anio.estado]?.clase">
                 {{ ESTADOS_ANIO[anio.estado]?.etiqueta ?? anio.estado }}
               </span>
@@ -283,7 +305,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 class="text-2xl font-bold text-slate-800">
-                  Año lectivo {{ seleccionado.nombre }}
+                  Año lectivo {{ seleccionado.anio }}
                   <span class="ml-2 px-3 py-1 rounded-full text-sm font-medium align-middle" :class="ESTADOS_ANIO[seleccionado.estado]?.clase">
                     {{ ESTADOS_ANIO[seleccionado.estado]?.etiqueta ?? seleccionado.estado }}
                   </span>
@@ -291,6 +313,9 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                 <p class="text-slate-500 mt-1">{{ fecha(seleccionado.fecha_inicio) }} al {{ fecha(seleccionado.fecha_fin) }}</p>
                 <p v-if="!seleccionado.fecha_inicio || !seleccionado.fecha_fin" class="text-amber-700 text-sm mt-1">
                   Complete las fechas del año antes de activarlo.
+                </p>
+                <p v-if="seleccionado.estado === 'inactivo' && !seleccionado.periodos?.length" class="text-amber-700 text-sm mt-1">
+                  Agregue al menos un periodo antes de activarlo.
                 </p>
               </div>
 
@@ -319,11 +344,39 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
           <div class="bg-white rounded-3xl shadow-xl p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-semibold text-slate-800">Periodos</h3>
-              <button v-if="seleccionado.estado !== 'cierre' && (seleccionado.periodos?.length ?? 0) < 6" :disabled="ocupado" @click="agregarPeriodo"
+              <button v-if="seleccionado.estado !== 'cierre' && (seleccionado.periodos?.length ?? 0) < MAX_PERIODOS && !formPeriodo" :disabled="ocupado" @click="abrirFormPeriodo"
                 :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                 <i class="pi pi-plus"></i> Agregar periodo
               </button>
             </div>
+
+            <!-- Formulario de periodo -->
+            <form v-if="formPeriodo" class="grid md:grid-cols-3 gap-4 mb-5 p-4 rounded-2xl border border-blue-200 bg-blue-50/50" @submit.prevent="guardarNuevoPeriodo">
+              <h4 class="md:col-span-3 font-semibold text-slate-700">Nuevo periodo del año {{ seleccionado.anio }}</h4>
+
+              <label class="text-sm text-slate-600 md:col-span-2">
+                Nombre del periodo
+                <input v-model.trim="formPeriodo.nombre_periodo" maxlength="50" placeholder="Primer trimestre" :class="entradaInput" required />
+                <span v-if="erroresPeriodo.nombre_periodo" class="text-red-600 text-xs">{{ erroresPeriodo.nombre_periodo }}</span>
+              </label>
+
+              <label class="text-sm text-slate-600">
+                Nivel (n.º del periodo)
+                <select v-model.number="formPeriodo.nivel" :class="entradaInput" required>
+                  <option v-for="n in nivelesLibres" :key="n" :value="n">{{ n }}</option>
+                </select>
+                <span v-if="erroresPeriodo.nivel" class="text-red-600 text-xs">{{ erroresPeriodo.nivel }}</span>
+              </label>
+
+              <div class="md:col-span-3 flex gap-3 justify-end">
+                <button type="button" class="h-10 px-4 rounded-lg border border-slate-300 hover:bg-slate-100" @click="formPeriodo = null">
+                  Cancelar
+                </button>
+                <button type="submit" :disabled="ocupado" class="h-10 px-5 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50">
+                  Guardar periodo
+                </button>
+              </div>
+            </form>
 
             <p v-if="!seleccionado.periodos?.length" class="text-slate-500 text-sm">Este año lectivo no tiene periodos.</p>
 
@@ -331,7 +384,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
               <table v-if="seleccionado.periodos?.length" class="w-full min-w-[560px] border-collapse">
                 <thead>
                   <tr>
-                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">N.º</th>
+                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nivel</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nombre</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Acciones</th>
                   </tr>
@@ -342,12 +395,12 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
 
                     <template v-if="seleccionado.estado !== 'cierre' && edicionPeriodos[periodo.id]">
                       <td class="px-3 py-3 border-b border-slate-200">
-                        <input v-model.trim="edicionPeriodos[periodo.id].nombre" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
-                        <span v-if="erroresPeriodos[periodo.id]?.nombre" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre }}</span>
+                        <input v-model.trim="edicionPeriodos[periodo.id].nombre_periodo" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
+                        <span v-if="erroresPeriodos[periodo.id]?.nombre_periodo" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre_periodo }}</span>
                       </td>
                     </template>
                     <template v-else>
-                      <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nombre }}</td>
+                      <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nombre_periodo }}</td>
                     </template>
 
                     <td class="px-3 py-3 border-b border-slate-200">
@@ -357,7 +410,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                             :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                             <i class="pi pi-save"></i> Guardar
                           </button>
-                          <button v-if="periodo.nivel === ultimoNivel" :disabled="ocupado" @click="eliminarPeriodo(periodo)"
+                          <button :disabled="ocupado" @click="eliminarPeriodo(periodo)"
                             :class="[botonBase, 'border-red-500 text-red-600 hover:bg-red-500 hover:text-white']">
                             <i class="pi pi-trash"></i>
                           </button>

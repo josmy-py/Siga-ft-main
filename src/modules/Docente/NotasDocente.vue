@@ -228,7 +228,7 @@ const guardar = async () => {
                 class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent"
               >
                 <option v-if="!periodos.length" value="">Sin periodos</option>
-                <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+                <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre_periodo }}</option>
               </select>
             </div>
           </div>

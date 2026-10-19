@@ -157,7 +157,7 @@ const quitar = async (padre) => {
             </div>
             <div class="bg-gray-50 p-4 rounded-xl">
               <p class="text-xs text-gray-500">Año lectivo</p>
-              <p class="font-semibold">{{ ultima?.anio_lectivo?.nombre || "—" }}</p>
+              <p class="font-semibold">{{ ultima?.anio_lectivo?.anio || "—" }}</p>
             </div>
           </div>
           <p class="text-sm text-gray-600 mt-4">
@@ -252,7 +252,7 @@ const quitar = async (padre) => {
           <h3 class="font-semibold mb-4"><i class="pi pi-book mr-2"></i> Matrículas</h3>
           <div v-for="m in alumno.matriculas" :key="m.id" class="p-3 bg-gray-50 rounded-xl mb-2 text-sm">
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <span>{{ m.anio_lectivo?.nombre || "Sin año" }} · {{ m.seccion?.grado?.nombre || "—" }} {{ m.seccion?.nombre || "" }}</span>
+              <span>{{ m.anio_lectivo?.anio || "Sin año" }} · {{ m.seccion?.grado?.nombre || "—" }} {{ m.seccion?.nombre || "" }}</span>
               <span class="flex items-center gap-3">
                 <span class="font-semibold">{{ m.estado }}</span>
                 <button class="text-blue-600 hover:underline" @click="comprobanteId = m.id">

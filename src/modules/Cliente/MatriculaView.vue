@@ -352,7 +352,7 @@ const claseCampo = (campo) =>
                 </select>
                 <p v-if="errores.turno" class="text-red-600 text-xs mt-1">{{ errores.turno }}</p>
                 <p v-else-if="grado && !turnosGrado.length" class="text-amber-700 text-xs mt-1">
-                  {{ grado.nombre }} no tiene secciones con cupo en {{ opciones.anio_lectivo?.nombre }}.
+                  {{ grado.nombre }} no tiene secciones con cupo en {{ opciones.anio_lectivo?.anio }}.
                 </p>
                 <p v-else-if="grado && turnosGrado.length === 1" class="text-gray-500 text-xs mt-1">
                   Solo hay secciones con cupo en el turno de la {{ TURNOS[turnosGrado[0]]?.toLowerCase() }}.

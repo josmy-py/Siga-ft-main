@@ -96,7 +96,7 @@ const claseCampo = (campo, bloqueado = false) => [
               <select v-model="formData.anio_lectivo_id" required :class="claseCampo('anio_lectivo_id')">
                 <option value="" disabled>Seleccione un año lectivo</option>
                 <option v-for="anio in anios" :key="anio.id" :value="anio.id">
-                  {{ anio.nombre }}{{ anio.estado === "activo" ? " (activo)" : "" }}
+                  {{ anio.anio }}{{ anio.estado === "activo" ? " (activo)" : "" }}
                 </option>
               </select>
               <p v-if="errores.anio_lectivo_id" class="text-red-600 text-xs mt-1">{{ errores.anio_lectivo_id }}</p>

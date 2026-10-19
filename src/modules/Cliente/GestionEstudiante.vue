@@ -98,7 +98,7 @@ const cancelar = async (m) => {
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500">Año lectivo</span>
-                <span class="font-medium text-gray-800">{{ m.anio_lectivo?.nombre || "—" }}</span>
+                <span class="font-medium text-gray-800">{{ m.anio_lectivo?.anio || "—" }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500">Ingreso</span>

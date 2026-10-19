@@ -150,7 +150,7 @@ const getConductaClass = (valoracion) =>
               class="w-full sm:w-auto border border-gray-200 text-gray-700 font-semibold rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm cursor-pointer text-sm"
             >
               <option v-if="!periodos.length" value="">Sin periodos</option>
-              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre_periodo }}</option>
             </select>
           </div>
         </div>
@@ -238,7 +238,7 @@ const getConductaClass = (valoracion) =>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                   <tr v-for="fila in conducta?.periodos ?? []" :key="fila.periodo.id" class="hover:bg-blue-50/50 transition">
-                    <td class="px-6 py-5 font-semibold text-gray-800">{{ fila.periodo.nombre }}</td>
+                    <td class="px-6 py-5 font-semibold text-gray-800">{{ fila.periodo.nombre_periodo }}</td>
                     <td class="px-6 py-5 font-medium text-gray-700">
                       {{ fila.conducta?.descripcion ?? "Sin registrar" }}
                     </td>

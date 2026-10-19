@@ -27,7 +27,7 @@ const asignaturas = computed(() =>
   }))
 );
 
-const anio = computed(() => carga.value?.anio_lectivo?.nombre ?? "");
+const anio = computed(() => carga.value?.anio_lectivo?.anio ?? "");
 
 const cargar = async () => {
   cargando.value = true;

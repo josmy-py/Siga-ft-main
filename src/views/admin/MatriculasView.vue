@@ -211,7 +211,7 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
                 <td class="p-3 font-medium">{{ m.estudiante?.nombre }}</td>
                 <td class="p-3">{{ m.estudiante?.nie || "—" }}</td>
                 <td class="p-3">{{ m.ingreso }}</td>
-                <td class="p-3">{{ m.anio_lectivo?.nombre || "—" }}</td>
+                <td class="p-3">{{ m.anio_lectivo?.anio || "—" }}</td>
                 <td class="p-3">
                   <template v-if="m.seccion && m.estado === 'pendiente'">Pide {{ m.seccion.grado?.nombre }} · {{ TURNOS[m.seccion.turno] }}</template>
                   <template v-else-if="m.seccion">{{ m.seccion.grado?.nombre }} {{ m.seccion.nombre }} · {{ TURNOS[m.seccion.turno] }}</template>
@@ -237,7 +237,7 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
           <div>
             <h2 class="text-xl font-bold text-gray-800">{{ detalle.estudiante?.nombre }}</h2>
             <p class="text-sm text-gray-500">
-              {{ detalle.ingreso }} · {{ detalle.anio_lectivo?.nombre }} · Estado: {{ detalle.estado }}
+              {{ detalle.ingreso }} · {{ detalle.anio_lectivo?.anio }} · Estado: {{ detalle.estado }}
             </p>
           </div>
           <button class="p-2 hover:bg-gray-100 rounded-full" @click="cerrar"><i class="pi pi-times"></i></button>
