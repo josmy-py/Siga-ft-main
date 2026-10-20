@@ -1,14 +1,51 @@
 <script setup>
 import { ref } from "vue";
+import TarjetasReportes from "@/components/reportes/TarjetasReportes.vue";
 import reportBoleta from "@/modules/Docente/reportes/Boleta.vue";
 import reportConducta from "@/modules/Docente/reportes/Conducta.vue";
 
-// Diagrama: SIGA Docente > Libreta > Reporte de notas y Reporte de conducta
+// Portal docente > Reportes. Boletas y Conducta abren los reportes que ya
+// existen (notas y conducta por sección y periodo); Informe Profesor y
+// Reporte de Rendimiento quedan sin formulario hasta que se definan.
 const reporteSeleccionado = ref(null);
 
 const reportes = [
-  { id: "notas", nombre: "Reporte de notas", icono: "pi-file", color: "text-blue-600" },
-  { id: "conducta", nombre: "Reporte de conducta", icono: "pi-star", color: "text-amber-600" },
+  {
+    id: "notas",
+    titulo: "Boletas de Calificaciones",
+    descripcion: "Generar boletas de calificaciones por estudiante",
+    icono: "pi-file",
+    fondo: "bg-blue-100",
+    color: "text-blue-600",
+    disponible: true,
+  },
+  {
+    id: "conducta",
+    titulo: "Conducta",
+    descripcion: "Reporte de evaluación de conducta",
+    icono: "pi-star",
+    fondo: "bg-amber-100",
+    color: "text-amber-600",
+    disponible: true,
+  },
+  {
+    id: "informe-profesor",
+    titulo: "Informe Profesor",
+    descripcion: "Registro de actividades, observaciones realizadas por el profesor",
+    icono: "pi-user",
+    fondo: "bg-violet-100",
+    color: "text-violet-600",
+    disponible: false,
+  },
+  {
+    id: "rendimiento",
+    titulo: "Reporte de Rendimiento",
+    descripcion: "Reporte de estadisticas y promedios academicos",
+    icono: "pi-users",
+    fondo: "bg-cyan-100",
+    color: "text-cyan-600",
+    disponible: false,
+  },
 ];
 
 const cerrarFormulario = () => {
@@ -18,30 +55,12 @@ const cerrarFormulario = () => {
 
 <template>
   <div class="relative min-h-screen bg-gray-50 md:flex">
-    <main class="flex-1 transition-all duration-300">
-      <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div class="px-6 py-4 flex items-center justify-between">
-          <h1 class="text-xl font-bold text-gray-800">Libreta</h1>
-        </div>
-      </header>
+    <main class="flex-1 min-w-0 transition-all duration-300">
+      <TarjetasReportes v-if="!reporteSeleccionado" :reportes="reportes" @generar="reporteSeleccionado = $event" />
 
-      <div class="p-6 lg:p-8">
-        <div v-if="!reporteSeleccionado" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <button
-            v-for="reporte in reportes"
-            :key="reporte.id"
-            @click="reporteSeleccionado = reporte.id"
-            class="text-left bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow p-6"
-          >
-            <i :class="['pi', reporte.icono, reporte.color, 'text-2xl']"></i>
-            <h2 class="mt-3 font-bold text-gray-800">{{ reporte.nombre }}</h2>
-          </button>
-        </div>
-
-        <div v-else>
-          <reportBoleta v-if="reporteSeleccionado === 'notas'" @cerrar="cerrarFormulario" />
-          <reportConducta v-if="reporteSeleccionado === 'conducta'" @cerrar="cerrarFormulario" />
-        </div>
+      <div v-else class="p-6 lg:p-8">
+        <reportBoleta v-if="reporteSeleccionado === 'notas'" @cerrar="cerrarFormulario" />
+        <reportConducta v-if="reporteSeleccionado === 'conducta'" @cerrar="cerrarFormulario" />
       </div>
     </main>
   </div>
