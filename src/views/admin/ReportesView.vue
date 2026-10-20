@@ -5,9 +5,9 @@ import Academico from "@/modules/Admin/Forms/reports/Academico.vue";
 import Conducta from "@/modules/Admin/Forms/reports/Conducta.vue";
 
 // Portal director > Reportes, misma vista de tarjetas que el docente.
-// Académico y Conducta abren los reportes que ya existen (notas y conducta
-// por sección y periodo); Docente e Institucional quedan sin formulario hasta
-// que se definan.
+// Académico abre su formulario (se genera como PDF, sin guardarse); Conducta
+// abre el reporte de conducta por sección y periodo; Docente e Institucional
+// quedan sin formulario hasta que se definan.
 const formularioActivo = ref(null);
 
 const reportes = [
