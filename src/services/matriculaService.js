@@ -52,7 +52,7 @@ export const matriculaService = {
     return data
   },
 
-  // Foto o partida desde el disco privado, como URL local para verla
+  // Foto o documentación desde el disco privado, como URL local para verla
   async archivo(id, tipo) {
     const { data } = await api.get(`/matriculas/${id}/archivos/${tipo}`, { responseType: 'blob' })
     return URL.createObjectURL(data)

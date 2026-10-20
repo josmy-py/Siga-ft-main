@@ -139,6 +139,9 @@ for (const campo of ["nie", "grado_id", "turno", "especialidad_id", "enfermedad_
   watch(() => form[campo], () => delete errores.value[campo]);
 }
 
+// Sin traslado la documentación deja de ser obligatoria
+watch(() => form.es_trasladado, () => delete errores.value.documento);
+
 const elegirTipo = (valor) => {
   tipo.value = valor;
   router.replace({ query: { ...route.query, tipo: valor } });
@@ -185,7 +188,9 @@ const validar = () => {
   else if (!turnosGrado.value.length) e.grado_id = "Este grado no tiene secciones con cupo.";
   else if (!form.turno) e.turno = "Seleccione el turno.";
   if (!form.foto) e.foto = errores.value.foto ?? "La foto es obligatoria.";
-  if (esNuevo.value && !form.documento) e.documento = errores.value.documento ?? "La partida de nacimiento es obligatoria para Nuevo ingreso.";
+  if (esNuevo.value && form.es_trasladado && !form.documento) {
+    e.documento = errores.value.documento ?? "La documentación es obligatoria si el estudiante proviene de otro centro escolar.";
+  }
   errores.value = e;
   return Object.keys(e).length === 0;
 };
@@ -204,7 +209,8 @@ const enviar = async () => {
       enfermedad_id: form.enfermedad_id,
       medicamento: form.enfermedad_id ? form.medicamento.trim() : "",
       discapacidades: form.discapacidades,
-      es_trasladado: form.es_trasladado,
+      // Solo Nuevo ingreso pregunta si proviene de otro centro escolar
+      es_trasladado: esNuevo.value && form.es_trasladado,
       foto: form.foto,
       documento: esNuevo.value ? form.documento : null,
     });
@@ -366,13 +372,16 @@ const claseCampo = (campo) =>
             </div>
             <p class="text-xs text-gray-500">El grado y el turno sirven a la dirección para asignar la sección al revisar la solicitud.</p>
 
-            <label class="flex items-center gap-2 text-sm text-gray-700">
+            <!-- Solo en Nuevo ingreso (matriculas.es_trasladado); si proviene de otro centro escolar la documentación es obligatoria -->
+            <label v-if="esNuevo" class="flex items-center gap-2 text-sm text-gray-700">
               <input v-model="form.es_trasladado" type="checkbox" class="w-4 h-4" />
               ¿El estudiante proviene de otro centro escolar?
             </label>
 
             <div v-if="esNuevo">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Partida de nacimiento * (PDF, JPEG o PNG, máx. 2 MB)</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Documentación{{ form.es_trasladado ? " *" : " (opcional)" }} (PDF, JPEG o PNG, máx. 2 MB)
+              </label>
               <input type="file" accept="application/pdf,image/jpeg,image/png" class="text-sm" @change="elegirArchivo('documento', $event, DOCUMENTOS)" />
               <p v-if="errores.documento" class="text-red-600 text-xs mt-1">{{ errores.documento }}</p>
             </div>
