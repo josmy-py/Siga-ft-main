@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import Swal from "sweetalert2";
 import { useAuthStore } from "@/stores/authStore";
 import { reporteService } from "@/services/reporteService";
 import { seccionService } from "@/services/seccionService";
+import { dato, fechaLegible, fila, hoy, imprimirReporte, porcentaje, seccion, texto } from "@/components/reportes/documentoReporte";
 
 // Portal director > Reportes > Reporte Académico (formulario de Josmy, 20/10/2026).
 // No se guarda en la base de datos: "Generar Reporte" arma el documento con lo
@@ -23,11 +23,6 @@ const nivelDeGrado = (orden) => {
   if (orden <= 0) return "Parvularia";
   if (orden <= 9) return "Educación Básica";
   return "Bachillerato";
-};
-
-const hoy = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
 const form = ref({
@@ -128,71 +123,34 @@ const calcularIndicadores = async () => {
 
 watch(() => [form.value.nivel, form.value.periodo_id], calcularIndicadores);
 
-const escapar = (texto) =>
-  String(texto ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-
-const fechaLegible = (iso) => {
-  if (!iso) return "";
-  const [a, m, d] = iso.split("-");
-  return `${d}/${m}/${a}`;
-};
-
-const documento = () => {
-  const f = form.value;
-  const dato = (etiqueta, valor) => `<div class="dato"><span>${etiqueta}</span><strong>${escapar(valor) || "—"}</strong></div>`;
-  const texto = (titulo, valor) => `<h2>${titulo}</h2><p class="texto">${escapar(valor) || "—"}</p>`;
-  const porcentaje = (v) => (v === "" || v === null ? "" : `${v} %`);
-
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reporte Académico</title>
-<style>
-  body { font-family: Arial, sans-serif; color: #1f2937; margin: 32px; font-size: 13px; }
-  .encabezado { background: linear-gradient(90deg, #4f46e5, #7c3aed); color: #fff; padding: 18px 22px; border-radius: 10px;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .encabezado h1 { margin: 0 0 4px; font-size: 22px; }
-  .encabezado p { margin: 0; font-size: 12px; }
-  h2 { font-size: 15px; color: #4c1d95; border-bottom: 1px solid #ddd6fe; padding-bottom: 4px; margin: 22px 0 10px; }
-  .fila { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .fila.dos { grid-template-columns: repeat(2, 1fr); }
-  .fila.cuatro { grid-template-columns: repeat(4, 1fr); }
-  .dato { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
-  .dato span { display: block; font-size: 11px; color: #6b7280; }
-  .texto { white-space: pre-wrap; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; min-height: 40px; margin: 0; }
-  .pie { margin-top: 40px; font-size: 11px; color: #6b7280; text-align: center; }
-  .firma { margin: 60px auto 0; width: 260px; border-top: 1px solid #374151; text-align: center; padding-top: 6px; }
-</style></head><body>
-<div class="encabezado"><h1>Reporte Académico</h1><p>Registro y consolidación de información académica y administrativa.</p></div>
-<h2>Identificación</h2>
-<div class="fila">${dato("Nivel Académico", f.nivel)}${dato("Período", periodoActual.value?.nombre_periodo)}${dato("Fecha", fechaLegible(f.fecha))}</div>
-<h2>Responsable</h2>
-<div class="fila">${dato("Nombre del Director", f.director)}${dato("Correo Electrónico", f.correo)}${dato("Cargo", f.cargo)}</div>
-<h2>Indicadores Académicos</h2>
-<div class="fila cuatro">${dato("Total Estudiantes", f.total_estudiantes)}${dato("Promedio General", f.promedio_general)}${dato("% Aprobación", porcentaje(f.porcentaje_aprobacion))}${dato("% Reprobación", porcentaje(f.porcentaje_reprobacion))}</div>
-${texto("Rendimiento Académico", f.rendimiento)}
-<h2>Asignaturas con Mayor y Menor Rendimiento</h2>
-<div class="fila dos">${dato("Asignatura con mejor rendimiento", f.mejor_asignatura)}${dato("Asignatura con menor rendimiento", f.menor_asignatura)}</div>
-${texto("Estudiantes Destacados", f.destacados)}
-${texto("Recomendaciones Académicas", f.recomendaciones)}
-${texto("Observaciones Generales", f.observaciones)}
-<div class="firma">${escapar(f.director)}<br>${escapar(f.cargo)}</div>
-<div class="pie">Generado por SIGA el ${fechaLegible(hoy())}</div>
-</body></html>`;
-};
-
 const generar = () => {
-  const ventana = window.open("", "_blank");
-  if (!ventana) {
-    Swal.fire({ icon: "warning", title: "Permita las ventanas emergentes para generar el PDF." });
-    return;
-  }
-  ventana.document.open();
-  ventana.document.write(documento());
-  ventana.document.close();
-  ventana.focus();
-  setTimeout(() => ventana.print(), 300);
+  const f = form.value;
+  imprimirReporte({
+    titulo: "Reporte Académico",
+    subtitulo: "Registro y consolidación de información académica y administrativa.",
+    cuerpo: [
+      seccion("Identificación", fila(dato("Nivel Académico", f.nivel), dato("Período", periodoActual.value?.nombre_periodo), dato("Fecha", fechaLegible(f.fecha)))),
+      seccion("Responsable", fila(dato("Nombre del Director", f.director), dato("Correo Electrónico", f.correo), dato("Cargo", f.cargo))),
+      seccion(
+        "Indicadores Académicos",
+        fila(
+          dato("Total Estudiantes", f.total_estudiantes),
+          dato("Promedio General", f.promedio_general),
+          dato("% Aprobación", porcentaje(f.porcentaje_aprobacion)),
+          dato("% Reprobación", porcentaje(f.porcentaje_reprobacion)),
+        ),
+      ),
+      seccion("Rendimiento Académico", texto(f.rendimiento)),
+      seccion(
+        "Asignaturas con Mayor y Menor Rendimiento",
+        fila(dato("Asignatura con mejor rendimiento", f.mejor_asignatura), dato("Asignatura con menor rendimiento", f.menor_asignatura)),
+      ),
+      seccion("Estudiantes Destacados", texto(f.destacados)),
+      seccion("Recomendaciones Académicas", texto(f.recomendaciones)),
+      seccion("Observaciones Generales", texto(f.observaciones)),
+    ].join(""),
+    firma: [f.director, f.cargo],
+  });
 };
 
 const entrada =

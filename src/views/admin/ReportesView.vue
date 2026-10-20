@@ -3,11 +3,12 @@ import { ref } from "vue";
 import TarjetasReportes from "@/components/reportes/TarjetasReportes.vue";
 import Academico from "@/modules/Admin/Forms/reports/Academico.vue";
 import Conducta from "@/modules/Admin/Forms/reports/Conducta.vue";
+import Docente from "@/modules/Admin/Forms/reports/Docente.vue";
 
 // Portal director > Reportes, misma vista de tarjetas que el docente.
-// Académico abre su formulario (se genera como PDF, sin guardarse); Conducta
-// abre el reporte de conducta por sección y periodo; Docente e Institucional
-// quedan sin formulario hasta que se definan.
+// Académico y Docente abren su formulario (se genera como PDF, sin guardarse);
+// Conducta abre el reporte de conducta por sección y periodo; Institucional
+// queda sin formulario hasta que se defina.
 const formularioActivo = ref(null);
 
 const reportes = [
@@ -36,7 +37,7 @@ const reportes = [
     icono: "pi-users",
     fondo: "bg-green-100",
     color: "text-green-600",
-    disponible: false,
+    disponible: true,
   },
   {
     id: "institucional",
@@ -62,6 +63,7 @@ const cerrarFormulario = () => {
       <div v-else class="p-4 lg:p-6">
         <Academico v-if="formularioActivo === 'academico'" @cerrar="cerrarFormulario" />
         <Conducta v-else-if="formularioActivo === 'conducta'" @cerrar="cerrarFormulario" />
+        <Docente v-else-if="formularioActivo === 'docente'" @cerrar="cerrarFormulario" />
       </div>
     </main>
   </div>
