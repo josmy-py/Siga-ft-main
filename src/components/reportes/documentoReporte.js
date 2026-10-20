@@ -1,6 +1,6 @@
 import Swal from 'sweetalert2'
 
-// Documento imprimible de los formularios de Reportes del director. No se
+// Documento imprimible de los formularios de Reportes (director y docente). No se
 // guarda en la base de datos: se abre en una ventana nueva y el navegador lo
 // imprime o lo guarda como PDF.
 
@@ -30,6 +30,11 @@ export const dato = (etiqueta, valor) =>
 export const fila = (...datos) => `<div class="fila c${datos.length}">${datos.join('')}</div>`
 export const seccion = (titulo, contenido) => `<h2>${titulo}</h2>${contenido}`
 export const texto = (valor) => `<p class="texto">${escapar(valor) || '—'}</p>`
+// filas: [[celda, celda], ...]; la última fila se resalta si resaltarUltima
+export const tabla = (encabezados, filas, { resaltarUltima = false } = {}) =>
+  `<table><thead><tr>${encabezados.map((e) => `<th>${escapar(e)}</th>`).join('')}</tr></thead><tbody>${filas
+    .map((f, i) => `<tr${resaltarUltima && i === filas.length - 1 ? ' class="total"' : ''}>${f.map((c) => `<td>${escapar(c)}</td>`).join('')}</tr>`)
+    .join('')}</tbody></table>`
 
 const ESTILOS = `
   body { font-family: Arial, sans-serif; color: #1f2937; margin: 32px; font-size: 13px; }
@@ -46,6 +51,10 @@ const ESTILOS = `
   .dato { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; }
   .dato span { display: block; font-size: 11px; color: #6b7280; }
   .texto { white-space: pre-wrap; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; min-height: 40px; margin: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #e5e7eb; padding: 7px 10px; text-align: left; }
+  th { background: #f3f4f6; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr.total td { font-weight: bold; color: #15803d; background: #f0fdf4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .pie { margin-top: 40px; font-size: 11px; color: #6b7280; text-align: center; }
   .firma { margin: 60px auto 0; width: 260px; border-top: 1px solid #374151; text-align: center; padding-top: 6px; }
 `

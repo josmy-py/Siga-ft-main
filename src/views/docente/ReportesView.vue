@@ -3,10 +3,12 @@ import { ref } from "vue";
 import TarjetasReportes from "@/components/reportes/TarjetasReportes.vue";
 import reportBoleta from "@/modules/Docente/reportes/Boleta.vue";
 import reportConducta from "@/modules/Docente/reportes/Conducta.vue";
+import InformeProfesor from "@/modules/Docente/reportes/InformeProfesor.vue";
 
-// Portal docente > Reportes. Boletas y Conducta abren los reportes que ya
-// existen (notas y conducta por sección y periodo); Informe Profesor y
-// Reporte de Rendimiento quedan sin formulario hasta que se definan.
+// Portal docente > Reportes. Boletas (libreta de notas por estudiante) e
+// Informe Profesor abren su formulario (se genera como PDF, sin guardarse);
+// Conducta abre el reporte de conducta por sección y periodo; Reporte de
+// Rendimiento queda sin formulario hasta que se defina.
 const reporteSeleccionado = ref(null);
 
 const reportes = [
@@ -35,7 +37,7 @@ const reportes = [
     icono: "pi-user",
     fondo: "bg-violet-100",
     color: "text-violet-600",
-    disponible: false,
+    disponible: true,
   },
   {
     id: "rendimiento",
@@ -61,6 +63,7 @@ const cerrarFormulario = () => {
       <div v-else class="p-6 lg:p-8">
         <reportBoleta v-if="reporteSeleccionado === 'notas'" @cerrar="cerrarFormulario" />
         <reportConducta v-if="reporteSeleccionado === 'conducta'" @cerrar="cerrarFormulario" />
+        <InformeProfesor v-if="reporteSeleccionado === 'informe-profesor'" @cerrar="cerrarFormulario" />
       </div>
     </main>
   </div>
