@@ -101,7 +101,7 @@ const liberarCarga = async (tarjeta) => {
   const { isConfirmed } = await Swal.fire({
     icon: "warning",
     title: "¿Quitar toda la carga académica?",
-    text: `Se quitarán las ${tarjeta.materias} materias de ${tarjeta.docente.nombre} en ${anioSeleccionado.value?.nombre}. No es posible si alguna ya tiene evaluaciones o notas.`,
+    text: `Se quitarán las ${tarjeta.materias} materias de ${tarjeta.docente.nombre} en ${anioSeleccionado.value?.anio}. No es posible si alguna ya tiene evaluaciones o notas.`,
     showCancelButton: true,
     confirmButtonText: "Sí, quitar",
     cancelButtonText: "Cancelar",
@@ -150,12 +150,12 @@ const etiquetaSeccion = (a) => `${a.seccion?.grado?.nombre ?? ""} ${a.seccion?.n
             No hay años lectivos. Créelos primero en Años lectivos.
           </div>
           <div v-else-if="anioCerrado" class="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-sm">
-            El año lectivo {{ anioSeleccionado.nombre }} está cerrado: su carga académica solo se puede consultar.
+            El año lectivo {{ anioSeleccionado.anio }} está cerrado: su carga académica solo se puede consultar.
           </div>
 
           <div class="flex justify-between items-center mb-6">
             <p class="text-sm text-slate-500">
-              {{ asignaciones.length }} materias asignadas en {{ anioSeleccionado?.nombre ?? "—" }}
+              {{ asignaciones.length }} materias asignadas en {{ anioSeleccionado?.anio ?? "—" }}
             </p>
             <button
               v-if="!anioCerrado && anioSeleccionado"

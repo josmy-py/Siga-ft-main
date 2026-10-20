@@ -23,10 +23,16 @@ const seccionEditada = ref(null);
 
 const anioSeleccionado = computed(() => anios.value.find((a) => a.id === Number(filtros.value.anio_lectivo_id)));
 const anioCerrado = computed(() => anioSeleccionado.value?.estado === "cierre");
-// Con un año lectivo activo las secciones solo se consultan (la API también lo impide)
-const anioActivo = computed(() => anios.value.find((a) => a.estado === "activo") ?? null);
-const soloConsulta = computed(() => anioCerrado.value || !!anioActivo.value);
-const aniosAbiertos = computed(() => anios.value.filter((a) => a.estado !== "cierre"));
+// Las secciones de un año se administran mientras ese año no haya comenzado,
+// aunque esté activo (20/10/2026); cerrado o ya comenzado, solo se consultan (la API también lo impide)
+const anioComenzado = computed(() => !!anioSeleccionado.value?.comenzado && !anioCerrado.value);
+const soloConsulta = computed(() => anioCerrado.value || anioComenzado.value);
+const aniosAbiertos = computed(() => anios.value.filter((a) => a.estado !== "cierre" && !a.comenzado));
+const editable = (seccion) => {
+  const anio = anios.value.find((a) => a.id === seccion.anio_lectivo_id);
+  return !!anio && anio.estado !== "cierre" && !anio.comenzado;
+};
+const fecha = (valor) => (valor ? String(valor).slice(0, 10).split("-").reverse().join("/") : "");
 const etiquetaTurno = (valor) => TURNOS.find((t) => t.valor === valor)?.etiqueta ?? valor;
 
 const totales = computed(() => ({
@@ -129,7 +135,7 @@ const claseOcupacion = (s) =>
         @click="abrirCrear"
         :disabled="soloConsulta || !aniosAbiertos.length"
         class="ml-auto h-11 px-5 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        :title="anioActivo ? `Hay un año lectivo activo (${anioActivo.anio})` : anioCerrado ? 'El año lectivo seleccionado está cerrado' : ''"
+        :title="anioComenzado ? `El año lectivo ${anioSeleccionado.anio} ya comenzó` : anioCerrado ? 'El año lectivo seleccionado está cerrado' : !aniosAbiertos.length ? 'No hay años lectivos que aún no hayan comenzado' : ''"
       >
         + Nueva sección
       </button>
@@ -167,8 +173,8 @@ const claseOcupacion = (s) =>
     <div v-else-if="!anios.length && !cargando" class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
       No hay años lectivos. Créelos primero en Años lectivos.
     </div>
-    <div v-else-if="anioActivo" class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
-      Hay un año lectivo activo ({{ anioActivo.anio }}): las secciones no se pueden crear, modificar ni eliminar hasta que se cierre.
+    <div v-else-if="anioComenzado" class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+      El año lectivo {{ anioSeleccionado.anio }} ya comenzó ({{ fecha(anioSeleccionado.fecha_inicio) }}): sus secciones no se pueden crear, modificar ni eliminar.
     </div>
     <div v-else-if="anioCerrado" class="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-sm">
       El año lectivo {{ anioSeleccionado.anio }} está cerrado: sus secciones solo se pueden consultar.
@@ -221,7 +227,7 @@ const claseOcupacion = (s) =>
               </span>
             </td>
             <td class="px-4 py-3 border-b border-slate-200">
-              <div v-if="!soloConsulta" class="flex flex-wrap gap-2">
+              <div v-if="editable(seccion)" class="flex flex-wrap gap-2">
                 <button
                   @click="abrirEditar(seccion)"
                   class="flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white transition"
@@ -259,7 +265,7 @@ const claseOcupacion = (s) =>
       :anios="aniosAbiertos"
       :grados="grados"
       :docentes="docentes"
-      :anio-por-defecto="anioCerrado ? '' : filtros.anio_lectivo_id"
+      :anio-por-defecto="soloConsulta ? '' : filtros.anio_lectivo_id"
       @cerrar="cerrarModal"
       @guardado="alGuardar"
     />

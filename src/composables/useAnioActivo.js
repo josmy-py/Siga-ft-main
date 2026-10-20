@@ -1,8 +1,8 @@
 import { onMounted, ref } from "vue";
 import { anioLectivoService } from "@/services/calendarioService";
 
-// Especialidades y secciones no se crean, modifican ni eliminan mientras haya un
-// año lectivo activo (pedido de Josmy, 19/10/2026). La API también lo impide.
+// Año lectivo activo. Trae "comenzado": las especialidades no se crean, modifican
+// ni eliminan cuando el año activo ya comenzó (pedido de Josmy, 20/10/2026). La API también lo impide.
 export function useAnioActivo() {
   const anioActivo = ref(null);
 

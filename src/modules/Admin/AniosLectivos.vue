@@ -121,13 +121,20 @@ const ejecutar = async (accion, porDefecto) => {
 
 // El año lectivo se identifica por su año (campo "anio" del diagrama); los periodos se agregan después
 const nuevoAnio = () => {
-  formAnio.value = { id: null, anio: new Date().getFullYear() + 1, fecha_inicio: "", fecha_fin: "" };
+  formAnio.value = { id: null, anio: new Date().getFullYear() + 1, fecha_inicio: "", fecha_fin: "", inicio_matricula: "", fin_matricula: "" };
   erroresAnio.value = {};
 };
 
 const editarAnio = () => {
   const a = seleccionado.value;
-  formAnio.value = { id: a.id, anio: a.anio, fecha_inicio: a.fecha_inicio ?? "", fecha_fin: a.fecha_fin ?? "" };
+  formAnio.value = {
+    id: a.id,
+    anio: a.anio,
+    fecha_inicio: a.fecha_inicio ?? "",
+    fecha_fin: a.fecha_fin ?? "",
+    inicio_matricula: a.inicio_matricula ?? "",
+    fin_matricula: a.fin_matricula ?? "",
+  };
   erroresAnio.value = {};
 };
 
@@ -285,6 +292,26 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             <span v-if="erroresAnio.fecha_fin" class="text-red-600 text-xs">{{ erroresAnio.fecha_fin }}</span>
           </label>
 
+          <!-- Periodo en que se pueden solicitar matrículas del año (puede empezar antes del inicio del año) -->
+          <label class="text-sm text-slate-600 md:col-start-2">
+            Inicio de matrícula
+            <input v-model="formAnio.inicio_matricula" type="date" :class="entradaInput" required />
+            <span v-if="erroresAnio.inicio_matricula" class="text-red-600 text-xs">{{ erroresAnio.inicio_matricula }}</span>
+          </label>
+
+          <label class="text-sm text-slate-600">
+            Fin de matrícula
+            <input
+              v-model="formAnio.fin_matricula"
+              type="date"
+              :min="formAnio.inicio_matricula || undefined"
+              :max="formAnio.fecha_fin || undefined"
+              :class="entradaInput"
+              required
+            />
+            <span v-if="erroresAnio.fin_matricula" class="text-red-600 text-xs">{{ erroresAnio.fin_matricula }}</span>
+          </label>
+
           <div class="md:col-span-3 flex gap-3 justify-end">
             <button type="button" class="h-10 px-4 rounded-lg border border-slate-300 hover:bg-slate-100" @click="formAnio = null">
               Cancelar
@@ -333,6 +360,19 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                   </span>
                 </h2>
                 <p class="text-slate-500 mt-1">{{ fecha(seleccionado.fecha_inicio) }} al {{ fecha(seleccionado.fecha_fin) }}</p>
+                <p class="text-slate-500 text-sm mt-1">
+                  Matrícula:
+                  <template v-if="seleccionado.inicio_matricula && seleccionado.fin_matricula">
+                    {{ fecha(seleccionado.inicio_matricula) }} al {{ fecha(seleccionado.fin_matricula) }}
+                    <span
+                      class="ml-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                      :class="seleccionado.matricula_abierta ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'"
+                    >
+                      {{ seleccionado.matricula_abierta ? "Abierta hoy" : "Cerrada hoy" }}
+                    </span>
+                  </template>
+                  <span v-else class="text-amber-700">sin fechas. Edite el año para indicarlas; sin ellas no se admiten matrículas.</span>
+                </p>
                 <p v-if="!seleccionado.fecha_inicio || !seleccionado.fecha_fin" class="text-amber-700 text-sm mt-1">
                   Complete las fechas del año antes de activarlo.
                 </p>
