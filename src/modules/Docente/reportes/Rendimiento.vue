@@ -1,14 +1,14 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
+import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
-import { dato, fila, imprimirReporte, seccion, tabla, texto } from "@/components/reportes/documentoReporte";
 
 // Portal docente > Reportes > Reporte de Rendimiento (formulario de Josmy, 20/10/2026).
 // Calificaciones de los alumnos de una sección en una asignatura del docente y un
 // período: el promedio de la boleta de cada alumno (reporte de notas existente).
-// No se guarda en la base de datos: "Generar Reporte" abre el documento para
-// imprimirlo o guardarlo como PDF.
+// "Generar Reporte" abre el PDF que arma el backend con dompdf (diseño de Josmy,
+// 21/10/2026) con los mismos datos. No se guarda en la base de datos.
 const emit = defineEmits(["cerrar"]);
 const MAX_OBSERVACIONES = 500;
 const NOTA_DESTACADO = 9;
@@ -19,6 +19,7 @@ const nombreProfesor = ref("");
 const notas = ref(null);
 const cargando = ref(false);
 const aviso = ref("");
+const generando = ref(false);
 
 const inicial = () => ({
   grado_id: "",
@@ -36,13 +37,11 @@ const grados = computed(() => {
   return [...unicos].map(([id, nombre]) => ({ id, nombre }));
 });
 const seccionesDelGrado = computed(() => carga.value.filter((s) => String(s.grado_id) === String(form.value.grado_id)));
-const gradoActual = computed(() => grados.value.find((g) => String(g.id) === String(form.value.grado_id)));
 const seccionActual = computed(() => carga.value.find((s) => String(s.id) === String(form.value.seccion_id)));
-const periodoActual = computed(() => periodos.value.find((p) => String(p.id) === String(form.value.periodo_id)));
 const materias = computed(() => seccionActual.value?.materias ?? []);
-const materiaActual = computed(() => materias.value.find((m) => String(m.asignacion_id) === String(form.value.asignacion_id)));
 
-const nota = (v) => (v === null || v === undefined ? "—" : String(Number(Number(v).toFixed(2))));
+// Uno o dos decimales, igual que el PDF: 9.0, 8.72
+const nota = (v) => (v === null || v === undefined ? "—" : Number(v).toFixed(2).replace(/(\.\d)0$/, "$1"));
 const alumnos = computed(() =>
   (notas.value?.estudiantes ?? []).map((e) => {
     const valor = e.promedios?.[form.value.asignacion_id];
@@ -112,33 +111,36 @@ const limpiar = () => {
   form.value = inicial();
 };
 
-const generar = () => {
+// Mensaje de error de una respuesta pedida como blob (422, 404...)
+const errorDeBlob = async (e) => {
+  try {
+    const cuerpo = JSON.parse(await e.response.data.text());
+    return Object.values(cuerpo.errors ?? {})[0]?.[0] ?? cuerpo.message;
+  } catch {
+    return null;
+  }
+};
+
+const generar = async () => {
   const f = form.value;
-  imprimirReporte({
-    titulo: "Reporte de Rendimiento",
-    subtitulo: "Estadísticas y promedios académicos",
-    cuerpo: [
-      seccion(
-        "Datos generales",
-        fila(dato("Grado", gradoActual.value?.nombre), dato("Sección", seccionActual.value?.nombre), dato("Período", periodoActual.value?.nombre)) +
-          fila(dato("Asignatura", materiaActual.value?.nombre), dato("Profesor responsable", f.profesor)),
-      ),
-      seccion(
-        "Calificaciones",
-        tabla(["Alumno", "Calificación"], [...alumnos.value.map((a) => [a.nombre, nota(a.calificacion)]), ["Promedio General", promedioGeneral.value]], {
-          resaltarUltima: true,
-        }),
-      ),
-      seccion(
-        `Estudiantes Destacados (Promedio ≥ ${NOTA_DESTACADO.toFixed(1)})`,
-        destacados.value.length
-          ? tabla(["Alumno", "Calificación"], destacados.value.map((a) => [a.nombre, nota(a.calificacion)]))
-          : texto("Ningún estudiante alcanza el promedio."),
-      ),
-      seccion("Observaciones del Docente", texto(f.observaciones)),
-    ].join(""),
-    firma: [f.profesor, "Docente"],
-  });
+  generando.value = true;
+  try {
+    const pdf = await reporteService.rendimientoPdf({
+      grado_id: f.grado_id,
+      seccion_id: f.seccion_id,
+      periodo_escolar_id: f.periodo_id,
+      asignacion_id: f.asignacion_id,
+      profesor: f.profesor,
+      observaciones: f.observaciones,
+    });
+    const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    Swal.fire({ icon: "error", title: (await errorDeBlob(e)) ?? "No se pudo generar el reporte." });
+  } finally {
+    generando.value = false;
+  }
 };
 
 const etiqueta = "block text-sm text-gray-600 mb-1";
@@ -248,7 +250,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       ></textarea>
     </label>
     <div class="mt-1 flex justify-between text-xs text-gray-500">
-      <span>Estas observaciones aparecerán en la boleta.</span>
+      <span>Estas observaciones aparecerán en el reporte.</span>
       <span>{{ form.observaciones.length }}/{{ MAX_OBSERVACIONES }}</span>
     </div>
 
@@ -259,8 +261,8 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <button type="button" :class="[boton, 'bg-gray-100 text-gray-700 hover:bg-gray-200']" @click="emit('cerrar')">
         <i class="pi pi-times"></i>Cancelar
       </button>
-      <button type="submit" :disabled="!alumnos.length" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
-        <i class="pi pi-check"></i>Generar Reporte
+      <button type="submit" :disabled="!alumnos.length || generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
+        <i :class="['pi', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Reporte
       </button>
     </div>
   </form>
