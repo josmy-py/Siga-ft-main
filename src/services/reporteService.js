@@ -92,4 +92,10 @@ export const reporteService = {
     const { data } = await api.post('/docente/reportes/conducta/pdf', datos, { responseType: 'blob' })
     return data
   },
+
+  // Reporte de Conducta (director): total de estudiantes con matrícula aprobada en el año del período
+  async conductaIndicadores(periodoId) {
+    const { data } = await api.get('/reportes/conducta/indicadores', { params: { periodo_escolar_id: periodoId } })
+    return data
+  },
 }
