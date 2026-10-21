@@ -6,9 +6,9 @@ import reportConducta from "@/modules/Docente/reportes/Conducta.vue";
 import InformeProfesor from "@/modules/Docente/reportes/InformeProfesor.vue";
 import Rendimiento from "@/modules/Docente/reportes/Rendimiento.vue";
 
-// Portal docente > Reportes. Boletas (libreta de notas por estudiante), Informe
-// Profesor y Reporte de Rendimiento abren su formulario (se genera como PDF, sin
-// guardarse); Conducta abre el reporte de conducta por sección y periodo.
+// Portal docente > Reportes. Cada tarjeta abre su formulario: Boletas (libreta de
+// notas por estudiante), Conducta (reporte de conducta de un estudiante), Informe
+// Profesor y Reporte de Rendimiento. Se generan como PDF, sin guardarse.
 const reporteSeleccionado = ref(null);
 
 const reportes = [
