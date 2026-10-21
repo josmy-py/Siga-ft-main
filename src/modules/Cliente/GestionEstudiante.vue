@@ -4,7 +4,6 @@ import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import { matriculaService, TURNOS } from "../../services/matriculaService";
 import { mensajeError } from "../../services/api";
-import ComprobanteMatricula from "../../components/ComprobanteMatricula.vue";
 
 // M6: solicitudes de matrícula de la cuenta (API real)
 const router = useRouter();
@@ -12,7 +11,6 @@ const router = useRouter();
 const matriculas = ref([]);
 const cargando = ref(true);
 const error = ref("");
-const comprobanteId = ref(null);
 
 const ESTADOS = {
   pendiente: { texto: "Pendiente", clase: "bg-amber-100 text-amber-700" },
@@ -127,18 +125,10 @@ const cancelar = async (m) => {
               >
                 Cancelar solicitud
               </button>
-              <button
-                class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-100"
-                @click="comprobanteId = m.id"
-              >
-                Comprobante
-              </button>
             </div>
           </div>
         </div>
       </div>
     </main>
-
-    <ComprobanteMatricula v-if="comprobanteId" :matricula-id="comprobanteId" @cerrar="comprobanteId = null" />
   </div>
 </template>

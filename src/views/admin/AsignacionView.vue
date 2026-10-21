@@ -122,7 +122,7 @@ const etiquetaSeccion = (a) => `${a.seccion?.grado?.nombre ?? ""} ${a.seccion?.n
 <template>
   <div class="relative min-h-screen bg-slate-100 md:flex">
     <main class="flex-1 transition-all duration-300">
-      <header class="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
+      <header class=" bg-white border-b border-slate-200 shadow-sm">
         <div class="px-6 py-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 class="text-xl font-bold text-slate-800">Asignaciones Académicas</h1>

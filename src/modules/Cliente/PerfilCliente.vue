@@ -1,5 +1,4 @@
 <script setup>
-import ComprobanteMatricula from "../../components/ComprobanteMatricula.vue";
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
@@ -13,7 +12,6 @@ const router = useRouter();
 
 const cuenta = ref(null);
 const padre = ref(null);
-const comprobanteId = ref(null);
 const encargado = ref(null);
 const hijos = ref([]);
 const cargando = ref(true);
@@ -233,13 +231,6 @@ const irPadres = () => router.push({ name: "registro-padres" });
                     </template>
                     <template v-else>Sin matrícula</template>
                   </p>
-                  <button
-                    v-if="hijo.ultima_matricula"
-                    class="mt-2 text-sm text-blue-600 underline"
-                    @click="comprobanteId = hijo.ultima_matricula.id"
-                  >
-                    Comprobante de matrícula
-                  </button>
                 </div>
                 <p v-if="!hijos.length" class="text-sm text-gray-500">No hay estudiantes registrados.</p>
               </div>
@@ -248,8 +239,6 @@ const irPadres = () => router.push({ name: "registro-padres" });
         </template>
       </div>
     </main>
-
-    <ComprobanteMatricula v-if="comprobanteId" :matricula-id="comprobanteId" @cerrar="comprobanteId = null" />
 
     <!-- MODAL EDICIÓN -->
     <div v-if="modal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">

@@ -63,7 +63,6 @@ watch(periodoId, async () => {
   }
 });
 
-const imprimir = () => window.print();
 </script>
 
 <template>
@@ -71,13 +70,6 @@ const imprimir = () => window.print();
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6 print:hidden">
       <h2 class="text-xl font-semibold text-gray-800">{{ titulo }}</h2>
       <div class="flex gap-2">
-        <button
-          :disabled="!reporte"
-          class="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-          @click="imprimir"
-        >
-          <i class="pi pi-print mr-1"></i>Imprimir
-        </button>
         <button class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200" @click="emit('cerrar')">Volver</button>
       </div>
     </div>

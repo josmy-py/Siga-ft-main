@@ -157,12 +157,12 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
 <template>
   <div class="relative min-h-screen bg-gray-50 md:flex">
     <main class="flex-1 min-w-0 transition-all duration-300">
-      <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div class="px-6 py-2">
-          <h1 class="text-xl font-bold text-gray-800">Matrículas</h1>
-          <p class="text-xs text-gray-500">El encargado envía la solicitud; la dirección asigna la sección y la aprueba o rechaza.</p>
-        </div>
-      </header>
+    <header class="bg-white shadow-sm border-b border-gray-200">
+      <div class="px-6 py-2">
+      <h1 class="text-xl font-bold text-gray-800">Matrículas</h1>
+      <p class="text-xs text-gray-500">El encargado envía la solicitud; la dirección asigna la sección y la aprueba o rechaza.</p>
+      </div>
+    </header>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-6">
         <button
