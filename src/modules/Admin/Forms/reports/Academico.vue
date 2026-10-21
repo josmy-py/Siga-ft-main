@@ -4,13 +4,15 @@ import Swal from "sweetalert2";
 import { useAuthStore } from "@/stores/authStore";
 import { reporteService } from "@/services/reporteService";
 import { seccionService } from "@/services/seccionService";
-import { hoy } from "@/components/reportes/documentoReporte";
+import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 
 // Portal director > Reportes > Reporte Académico (formulario y diseño de PDF de
 // Josmy, 20/10/2026). El backend calcula los indicadores y las materias con las
 // boletas del período del nivel elegido (aprueba con 7) y genera el PDF con
 // dompdf; aquí se muestran solo como consulta. No se guarda en la base de datos.
 const emit = defineEmits(["cerrar"]);
+// El PDF lleva la fecha del día en que se genera (la pone el backend)
+const fechaHoy = fechaLegible(hoy());
 const auth = useAuthStore();
 
 const NIVELES = ["Parvularia", "Educación Básica", "Bachillerato"];
@@ -26,7 +28,6 @@ const nivelDeGrado = (orden) => {
 const form = ref({
   nivel: "",
   periodo_id: "",
-  fecha: hoy(),
   director: "",
   correo: auth.user?.email ?? "",
   cargo: "Director",
@@ -96,7 +97,6 @@ const generar = async () => {
     const pdf = await reporteService.academicoPdf({
       nivel: f.nivel,
       periodo_escolar_id: f.periodo_id,
-      fecha: f.fecha,
       nombre: f.director,
       cargo: f.cargo,
       correo: f.correo,
@@ -156,7 +156,7 @@ const etiqueta = "block text-xs text-gray-500 mb-1";
         </label>
         <label class="block">
           <span class="block text-sm text-gray-600 mb-1">Fecha</span>
-          <input v-model="form.fecha" type="date" :class="entrada" required />
+          <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
         </label>
       </div>
 

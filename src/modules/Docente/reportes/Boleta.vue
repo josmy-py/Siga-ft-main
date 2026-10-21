@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
-import { hoy } from "@/components/reportes/documentoReporte";
+import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 
 // Portal docente > Reportes > Boletas de Calificaciones: libreta de notas de un
 // estudiante (formulario de Josmy, 20/10/2026). Las asignaturas y calificaciones
@@ -13,6 +13,8 @@ import { hoy } from "@/components/reportes/documentoReporte";
 // el backend con dompdf (diseño de Josmy, 21/10/2026) con las mismas notas. No
 // se guarda en la base de datos.
 const emit = defineEmits(["cerrar"]);
+// El PDF lleva la fecha del día en que se genera (la pone el backend)
+const fechaHoy = fechaLegible(hoy());
 const MAX_OBSERVACIONES = 500;
 
 const carga = ref([]); // [{ id, nombre, grado_id, grado }]
@@ -24,7 +26,6 @@ const aviso = ref("");
 const generando = ref(false);
 
 const inicial = () => ({
-  fecha: hoy(),
   grado_id: "",
   seccion_id: "",
   periodo_id: "",
@@ -130,7 +131,6 @@ const generar = async () => {
   generando.value = true;
   try {
     const pdf = await reporteService.libretaNotasPdf({
-      fecha: f.fecha,
       grado_id: f.grado_id,
       seccion_id: f.seccion_id,
       periodo_escolar_id: f.periodo_id,
@@ -176,7 +176,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
         <label class="block">
           <span :class="etiqueta">Fecha</span>
-          <input v-model="form.fecha" type="date" :class="entrada" required />
+          <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
         </label>
         <label class="block">
           <span :class="etiqueta">Grado</span>

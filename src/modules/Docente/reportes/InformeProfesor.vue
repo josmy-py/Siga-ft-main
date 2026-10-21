@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
-import { hoy } from "@/components/reportes/documentoReporte";
+import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 
 // Portal docente > Reportes > Informe Profesor (formulario de Josmy, 20/10/2026).
 // Grado, sección y período salen de la carga académica del docente que inició
@@ -12,6 +12,8 @@ import { hoy } from "@/components/reportes/documentoReporte";
 // backend vuelve a validar que la sección sea del docente. No se guarda en la
 // base de datos.
 const emit = defineEmits(["cerrar"]);
+// El PDF lleva la fecha del día en que se genera (la pone el backend)
+const fechaHoy = fechaLegible(hoy());
 
 const carga = ref([]); // [{ id, nombre, grado_id, grado }]
 const periodos = ref([]);
@@ -20,7 +22,6 @@ const aviso = ref("");
 const generando = ref(false);
 
 const inicial = () => ({
-  fecha: hoy(),
   grado_id: "",
   seccion_id: "",
   profesor: nombreProfesor.value,
@@ -80,7 +81,6 @@ const generar = async () => {
   generando.value = true;
   try {
     const pdf = await reporteService.informeProfesorPdf({
-      fecha: f.fecha,
       grado_id: f.grado_id,
       seccion_id: f.seccion_id,
       periodo_escolar_id: f.periodo_id,
@@ -113,7 +113,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
     <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
       <label class="block">
         <span :class="etiqueta">Fecha</span>
-        <input v-model="form.fecha" type="date" :class="entrada" required />
+        <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
       </label>
       <label class="block">
         <span :class="etiqueta">Grado</span>

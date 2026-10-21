@@ -74,4 +74,16 @@ export const reporteService = {
     const { data } = await api.post('/docente/reportes/rendimiento/pdf', datos, { responseType: 'blob' })
     return data
   },
+
+  // Reporte Docente (director): total de docentes y activos del año del período
+  async docenteIndicadores(periodoId) {
+    const { data } = await api.get('/reportes/docente/indicadores', { params: { periodo_escolar_id: periodoId } })
+    return data
+  },
+
+  // Reporte Docente (director): PDF generado con dompdf en el backend
+  async docentePdf(datos) {
+    const { data } = await api.post('/reportes/docente/pdf', datos, { responseType: 'blob' })
+    return data
+  },
 }
