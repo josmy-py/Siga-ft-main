@@ -4,6 +4,7 @@ import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { conductaService } from "@/services/conductaService";
 import { reporteService } from "@/services/reporteService";
+import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 
 // Portal docente > Reportes > Conducta (formulario y diseño de PDF de Josmy,
 // 21/10/2026). Grado, sección y período salen de la carga académica del docente;
@@ -136,6 +137,8 @@ const generar = async () => {
   }
 };
 
+// Solo lectura: el PDF lleva la fecha del día en que se genera (la pone el backend)
+const fechaHoy = fechaLegible(hoy());
 const etiqueta = "block text-sm text-gray-600 mb-1";
 const entrada =
   "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400";
@@ -172,6 +175,10 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <label class="block">
         <span :class="etiqueta">Profesor responsable</span>
         <input :value="form.profesor" :class="[entrada, 'bg-gray-50']" readonly title="Docente que inició sesión" />
+      </label>
+      <label class="block">
+        <span :class="etiqueta">Fecha</span>
+        <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
       </label>
     </div>
 

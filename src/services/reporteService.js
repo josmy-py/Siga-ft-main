@@ -99,6 +99,12 @@ export const reporteService = {
     return data
   },
 
+  // Reporte de Conducta (director): PDF con dompdf (blob)
+  async conductaDirectorPdf(datos) {
+    const { data } = await api.post('/reportes/conducta/pdf', datos, { responseType: 'blob' })
+    return data
+  },
+
   // Reporte Institucional (director): indicadores del nivel en el período
   async institucionalIndicadores(nivel, periodoId) {
     const { data } = await api.get('/reportes/institucional/indicadores', { params: { nivel, periodo_escolar_id: periodoId } })
