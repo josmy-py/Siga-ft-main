@@ -13,7 +13,7 @@ import { reporteService } from "@/services/reporteService";
 // PDF que arma el backend con dompdf. No se guarda en la base de datos.
 const emit = defineEmits(["cerrar"]);
 const MAX_ACCIONES = 500;
-const TIPOS_CONDUCTA = ["Excelente", "Muy buena", "Buena", "Regular", "Necesita mejorar"];
+const TIPOS_CONDUCTA = ["Excelente", "Muy buena", "Buena", "Regular", "Mala", "Muy mala", "Necesita mejorar"];
 
 const carga = ref([]); // [{ id, nombre, grado_id, grado }]
 const periodos = ref([]);
