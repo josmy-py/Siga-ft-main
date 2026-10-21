@@ -101,6 +101,13 @@ const handleNavClick = () => {
           Reportes
         </router-link>
 
+        <router-link to="/Admin/constancias" class="menu-item" @click="handleNavClick">
+          <div class="bg-white drop-shadow p-2 rounded-full">
+            <i class="pi pi-verified text-blue-500"></i>
+          </div>
+          Constancias
+        </router-link>
+
         <router-link to="/Admin/anios-lectivos" class="menu-item" @click="handleNavClick">
           <div class="bg-white drop-shadow p-2 rounded-full">
             <i class="pi pi-calendar text-blue-500"></i>

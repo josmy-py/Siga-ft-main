@@ -223,6 +223,12 @@ const router = createRouter({
         },
 
         {
+          path: "constancias",
+          name: "constancias-admin",
+          component: () => import("../views/admin/ConstanciasView.vue"),
+        },
+
+        {
           path: "anios-lectivos",
           name: "anios-lectivos-admin",
           component: () => import("../modules/Admin/AniosLectivos.vue"),
