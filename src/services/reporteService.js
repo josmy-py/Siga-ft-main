@@ -62,4 +62,10 @@ export const reporteService = {
     const { data } = await api.post('/docente/reportes/informe-profesor/pdf', datos, { responseType: 'blob' })
     return data
   },
+
+  // Libreta de notas de un estudiante (docente): PDF generado con dompdf en el backend
+  async libretaNotasPdf(datos) {
+    const { data } = await api.post('/docente/reportes/libreta-notas/pdf', datos, { responseType: 'blob' })
+    return data
+  },
 }

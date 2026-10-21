@@ -1,15 +1,17 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
+import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
-import { dato, fila, imprimirReporte, seccion, tabla, texto } from "@/components/reportes/documentoReporte";
+import { hoy } from "@/components/reportes/documentoReporte";
 
 // Portal docente > Reportes > Boletas de Calificaciones: libreta de notas de un
 // estudiante (formulario de Josmy, 20/10/2026). Las asignaturas y calificaciones
 // salen del reporte de notas existente (boletas del periodo de cada materia de
 // la sección; el guía ve todas, los demás docentes solo las suyas). La conducta
-// registrada se precarga y es editable. No se guarda en la base de datos:
-// "Generar Reporte" abre el documento para imprimirlo o guardarlo como PDF.
+// registrada se precarga y es editable. "Generar Reporte" abre el PDF que arma
+// el backend con dompdf (diseño de Josmy, 21/10/2026) con las mismas notas. No
+// se guarda en la base de datos.
 const emit = defineEmits(["cerrar"]);
 const MAX_OBSERVACIONES = 500;
 
@@ -19,8 +21,10 @@ const notas = ref(null);
 const conductas = ref({}); // matricula_id -> { descripcion, valoracion }
 const cargando = ref(false);
 const aviso = ref("");
+const generando = ref(false);
 
 const inicial = () => ({
+  fecha: hoy(),
   grado_id: "",
   seccion_id: "",
   periodo_id: "",
@@ -37,14 +41,12 @@ const grados = computed(() => {
   return [...unicos].map(([id, nombre]) => ({ id, nombre }));
 });
 const seccionesDelGrado = computed(() => carga.value.filter((s) => String(s.grado_id) === String(form.value.grado_id)));
-const gradoActual = computed(() => grados.value.find((g) => String(g.id) === String(form.value.grado_id)));
-const seccionActual = computed(() => carga.value.find((s) => String(s.id) === String(form.value.seccion_id)));
-const periodoActual = computed(() => periodos.value.find((p) => String(p.id) === String(form.value.periodo_id)));
 const profesorResponsable = computed(() => notas.value?.seccion?.profesor?.nombre ?? "");
 const estudiantes = computed(() => notas.value?.estudiantes ?? []);
 const estudianteActual = computed(() => estudiantes.value.find((e) => String(e.matricula_id) === String(form.value.matricula_id)));
 
-const nota = (v) => (v === null || v === undefined ? "—" : String(Number(Number(v).toFixed(2))));
+// Uno o dos decimales, igual que el PDF: 9.0, 8.3, 8.72
+const nota = (v) => (v === null || v === undefined ? "—" : Number(v).toFixed(2).replace(/(\.\d)0$/, "$1"));
 const calificaciones = computed(() =>
   (notas.value?.materias ?? []).map((m) => ({ nombre: m.nombre, nota: nota(estudianteActual.value?.promedios?.[m.asignacion_id]) })),
 );
@@ -113,30 +115,38 @@ const limpiar = () => {
   form.value = inicial();
 };
 
-const generar = () => {
+// Mensaje de error de una respuesta pedida como blob (422, 404...)
+const errorDeBlob = async (e) => {
+  try {
+    const cuerpo = JSON.parse(await e.response.data.text());
+    return Object.values(cuerpo.errors ?? {})[0]?.[0] ?? cuerpo.message;
+  } catch {
+    return null;
+  }
+};
+
+const generar = async () => {
   const f = form.value;
-  const e = estudianteActual.value;
-  imprimirReporte({
-    titulo: "Libreta de Notas",
-    subtitulo: "Reporte de libreta de notas del estudiante",
-    cuerpo: [
-      seccion(
-        "Datos generales",
-        fila(dato("Estudiante", e?.estudiante?.nombre), dato("NIE", e?.estudiante?.nie)) +
-          fila(dato("Grado", gradoActual.value?.nombre), dato("Sección", seccionActual.value?.nombre), dato("Período", periodoActual.value?.nombre)) +
-          fila(dato("Profesor responsable", profesorResponsable.value)),
-      ),
-      seccion(
-        "Calificaciones",
-        tabla(["Asignatura", "Calificación"], [...calificaciones.value.map((c) => [c.nombre, c.nota]), ["Promedio General", nota(e?.promedio)]], {
-          resaltarUltima: true,
-        }),
-      ),
-      seccion("Conducta del Estudiante", fila(dato("Conducta general", f.conducta_general)) + texto(f.conducta_descripcion)),
-      seccion("Observaciones del Docente", texto(f.observaciones)),
-    ].join(""),
-    firma: [profesorResponsable.value, "Profesor responsable"],
-  });
+  generando.value = true;
+  try {
+    const pdf = await reporteService.libretaNotasPdf({
+      fecha: f.fecha,
+      grado_id: f.grado_id,
+      seccion_id: f.seccion_id,
+      periodo_escolar_id: f.periodo_id,
+      matricula_id: f.matricula_id,
+      conducta: f.conducta_general,
+      conducta_descripcion: f.conducta_descripcion,
+      observaciones: f.observaciones,
+    });
+    const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    Swal.fire({ icon: "error", title: (await errorDeBlob(e)) ?? "No se pudo generar la libreta." });
+  } finally {
+    generando.value = false;
+  }
 };
 
 const etiqueta = "block text-sm text-gray-600 mb-1";
@@ -164,6 +174,10 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <p v-if="aviso" class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{{ aviso }}</p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+        <label class="block">
+          <span :class="etiqueta">Fecha</span>
+          <input v-model="form.fecha" type="date" :class="entrada" required />
+        </label>
         <label class="block">
           <span :class="etiqueta">Grado</span>
           <span class="relative block">
@@ -239,11 +253,11 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <h3 :class="subtitulo"><i class="pi pi-flag text-base"></i>Conducta del Estudiante</h3>
       <label class="block">
         <span :class="etiqueta">Conducta general</span>
-        <input v-model.trim="form.conducta_general" :class="entrada" placeholder="Ej: Buena, Excelente, Regular..." />
+        <input v-model.trim="form.conducta_general" :class="entrada" maxlength="255" placeholder="Ej: Buena, Excelente, Regular..." />
       </label>
       <label class="block mt-4">
         <span :class="etiqueta">Descripción</span>
-        <textarea v-model="form.conducta_descripcion" :class="[entrada, 'h-20 resize-y']" placeholder="Descripción de la conducta del estudiante..."></textarea>
+        <textarea v-model="form.conducta_descripcion" maxlength="255" :class="[entrada, 'h-20 resize-y']" placeholder="Descripción de la conducta del estudiante..."></textarea>
       </label>
 
       <label class="block mt-6">
@@ -267,8 +281,8 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
         <button type="button" :class="[boton, 'bg-gray-100 text-gray-700 hover:bg-gray-200']" @click="emit('cerrar')">
           <i class="pi pi-times"></i>Cancelar
         </button>
-        <button type="submit" :disabled="!estudianteActual" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
-          <i class="pi pi-check"></i>Generar Reporte
+        <button type="submit" :disabled="!estudianteActual || generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
+          <i :class="['pi', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Reporte
         </button>
       </div>
     </div>
