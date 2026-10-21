@@ -7,9 +7,8 @@ import Docente from "@/modules/Admin/Forms/reports/Docente.vue";
 import Institucional from "@/modules/Admin/Forms/reports/Institucional.vue";
 
 // Portal director > Reportes, misma vista de tarjetas que el docente.
-// Cada tarjeta abre su formulario; no se guarda nada. Académico, Conducta y
-// Docente se generan como PDF; Institucional se imprime desde el navegador
-// hasta que llegue el diseño de su PDF.
+// Cada tarjeta abre su formulario; no se guarda nada. Los cuatro reportes se
+// generan como PDF con dompdf en el backend.
 const formularioActivo = ref(null);
 
 const reportes = [

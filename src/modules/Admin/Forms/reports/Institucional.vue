@@ -1,9 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, onMounted, watch } from "vue";
+import Swal from "sweetalert2";
 import { useAuthStore } from "@/stores/authStore";
 import { reporteService } from "@/services/reporteService";
 import { asignacionService } from "@/services/asignacionService";
-import { dato, fechaLegible, fila, hoy, imprimirReporte, seccion, texto } from "@/components/reportes/documentoReporte";
+import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 
 // Portal director > Reportes > Reporte Institucional (formulario de Josmy,
 // 21/10/2026). Por Nivel Académico y período salen de la base, y aquí solo se
@@ -11,9 +12,9 @@ import { dato, fechaLegible, fila, hoy, imprimirReporte, seccion, texto } from "
 // (promedio >= 9) y reprobados (< 7) según las boletas del período, nuevos
 // ingresos y total de docentes con carga en el nivel. Conducta, actividades,
 // docentes ausentes y textos no existen en el sistema y se llenan a mano. No se
-// guarda en la base de datos. La fecha es la del día en que se genera y el
-// correo el de la cuenta. El PDF con dompdf queda pendiente del diseño de Josmy:
-// mientras tanto "Generar Reporte" abre el documento para imprimirlo o guardarlo.
+// guarda en la base de datos. La fecha es solo de lectura (el PDF lleva la del
+// día en que se genera) y el correo es el de la cuenta. El backend genera el PDF
+// con dompdf con las mismas secciones del formulario.
 const emit = defineEmits(["cerrar"]);
 const auth = useAuthStore();
 const NIVELES = ["Parvularia", "Educación Básica", "Bachillerato"];
@@ -43,10 +44,10 @@ const form = ref({
 const periodos = ref([]);
 const indicadores = ref(null);
 const cargando = ref(false);
+const generando = ref(false);
 const aviso = ref("");
 
 const mensaje = (e, porDefecto) => e.response?.data?.message ?? porDefecto;
-const periodoActual = computed(() => periodos.value.find((p) => String(p.id) === String(form.value.periodo_id)));
 const valor = (campo) => (indicadores.value ? indicadores.value[campo] ?? "—" : "—");
 
 onMounted(async () => {
@@ -80,36 +81,48 @@ watch(
   },
 );
 
-const generar = () => {
+// Mensaje de error de una respuesta pedida como blob (422, 404...)
+const errorDeBlob = async (e) => {
+  try {
+    const cuerpo = JSON.parse(await e.response.data.text());
+    return Object.values(cuerpo.errors ?? {})[0]?.[0] ?? cuerpo.message;
+  } catch {
+    return null;
+  }
+};
+
+const vacioANull = (v) => (v === "" || v === null || v === undefined ? null : v);
+
+const generar = async () => {
   const f = form.value;
-  const i = indicadores.value ?? {};
-  imprimirReporte({
-    titulo: "Reporte Institucional",
-    subtitulo: "Informe Institucional",
-    cuerpo: [
-      seccion("Informe", fila(dato("Nivel académico", f.nivel), dato("Período", periodoActual.value?.nombre), dato("Fecha", fechaHoy))),
-      seccion("Datos del Director", fila(dato("Nombre", f.director), dato("Cargo", f.cargo), dato("Correo", auth.user?.email))),
-      seccion(
-        "Rendimiento Académico",
-        fila(dato("Total de estudiantes", i.total_estudiantes), dato("Promedio general", i.promedio_general ?? "—"), dato("Estudiantes destacados", i.estudiantes_destacados)) +
-          texto(f.descripcion_calificaciones),
-      ),
-      seccion(
-        "Conducta y Disciplina",
-        fila(dato("Incidentes", f.incidentes), dato("Reportes leves", f.reportes_leves), dato("Reportes graves", f.reportes_graves), dato("Medidas aplicadas", f.medidas_aplicadas)) +
-          texto(f.descripcion_casos),
-      ),
-      seccion(
-        "Actividades Institucionales",
-        fila(dato("Total de actividades", f.total_actividades), dato("Total de proyectos", f.total_proyectos), dato("Actividades", f.actividades.join(", "))) +
-          texto(f.descripcion_actividades),
-      ),
-      seccion("Control Escolar", fila(dato("Matrícula total", i.total_estudiantes), dato("Nuevos ingresos", i.nuevos_ingresos), dato("Estudiantes reprobados", i.estudiantes_reprobados))),
-      seccion("Recursos Humanos", fila(dato("Total de docentes", i.total_docentes), dato("Docentes ausentes", f.docentes_ausentes))),
-      seccion("Observaciones Generales", texto(f.observaciones)),
-    ].join(""),
-    firma: [f.director, f.cargo],
-  });
+  generando.value = true;
+  try {
+    const pdf = await reporteService.institucionalPdf({
+      nivel: f.nivel,
+      periodo_escolar_id: f.periodo_id,
+      nombre: f.director,
+      cargo: f.cargo,
+      descripcion_calificaciones: f.descripcion_calificaciones,
+      incidentes: vacioANull(f.incidentes),
+      reportes_leves: vacioANull(f.reportes_leves),
+      reportes_graves: vacioANull(f.reportes_graves),
+      medidas_aplicadas: vacioANull(f.medidas_aplicadas),
+      descripcion_casos: f.descripcion_casos,
+      total_actividades: f.total_actividades,
+      total_proyectos: f.total_proyectos,
+      actividades: f.actividades,
+      descripcion_actividades: f.descripcion_actividades,
+      docentes_ausentes: f.docentes_ausentes,
+      observaciones: f.observaciones,
+    });
+    const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    Swal.fire({ icon: "error", title: (await errorDeBlob(e)) ?? "No se pudo generar el reporte." });
+  } finally {
+    generando.value = false;
+  }
 };
 
 const entrada =
@@ -252,11 +265,11 @@ const icono = "w-11 h-11 rounded-lg flex items-center justify-center shrink-0";
         <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
           <label class="block">
             <span :class="etiqueta">Total de Actividades</span>
-            <input v-model="form.total_actividades" type="number" min="0" :class="entrada" placeholder="Total de Actividades" />
+            <input v-model="form.total_actividades" type="number" min="0" :class="entrada" placeholder="Total de Actividades" required />
           </label>
           <label class="block">
             <span :class="etiqueta">Total de Proyectos</span>
-            <input v-model="form.total_proyectos" type="number" min="0" :class="entrada" placeholder="Total de Proyectos" />
+            <input v-model="form.total_proyectos" type="number" min="0" :class="entrada" placeholder="Total de Proyectos" required />
           </label>
         </div>
         <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
@@ -307,7 +320,7 @@ const icono = "w-11 h-11 rounded-lg flex items-center justify-center shrink-0";
           </label>
           <label class="block">
             <span :class="etiqueta">Docentes Ausentes</span>
-            <input v-model="form.docentes_ausentes" type="number" min="0" :max="indicadores?.total_docentes" :class="entrada" placeholder="Docentes Ausentes" />
+            <input v-model="form.docentes_ausentes" type="number" min="0" :max="indicadores?.total_docentes" :class="entrada" placeholder="Docentes Ausentes" required />
           </label>
         </div>
         <p class="mt-2 text-xs text-gray-500">Total de docentes = docentes con carga académica en el nivel durante el año del período.</p>
@@ -328,8 +341,8 @@ const icono = "w-11 h-11 rounded-lg flex items-center justify-center shrink-0";
         <button type="button" class="px-5 py-2 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200" @click="emit('cerrar')">
           <i class="pi pi-times mr-2"></i>Cancelar
         </button>
-        <button type="submit" :disabled="!indicadores" class="px-5 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
-          <i class="pi pi-file-pdf mr-2"></i>Generar Reporte
+        <button type="submit" :disabled="!indicadores || generando" class="px-5 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+          <i :class="['pi mr-2', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Reporte
         </button>
       </div>
     </form>
