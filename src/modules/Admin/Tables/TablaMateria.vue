@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import Swal from "sweetalert2";
-import { asignaturaService } from "@/services/catalogoService";
+import { planAsignaturaService } from "@/services/catalogoService";
 import { mensajeError } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -27,7 +27,7 @@ const cargar = async () => {
   cargando.value = true;
   errorCarga.value = null;
   try {
-    Materias.value = await asignaturaService.delPlan(props.plan.id);
+    Materias.value = await planAsignaturaService.delPlan(props.plan.id);
   } catch (error) {
     errorCarga.value = mensajeError(error, "No se pudieron cargar las materias del plan");
   } finally {
@@ -50,7 +50,7 @@ const eliminar = async (materia) => {
   });
   if (!isConfirmed) return;
   try {
-    const { message } = await asignaturaService.delete(materia.id);
+    const { message } = await planAsignaturaService.delete(materia.id);
     await cargar();
     emit("cambio");
     Swal.fire({ icon: "success", title: message, timer: 2000, showConfirmButton: false });

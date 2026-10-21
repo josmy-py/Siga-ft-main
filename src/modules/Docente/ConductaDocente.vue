@@ -137,7 +137,7 @@ const guardar = async () => {
             <label class="block text-sm font-medium text-gray-700 mb-1"> Periodo </label>
             <select v-model="periodoId" class="px-4 py-2 border border-gray-300 rounded-lg" @change="cambiarPeriodo">
               <option v-if="!periodos.length" value="">Sin periodos</option>
-              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre_periodo }}</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
             </select>
           </div>
         </section>

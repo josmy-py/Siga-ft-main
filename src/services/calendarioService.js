@@ -48,7 +48,7 @@ export const anioLectivoService = {
         return response.data;
     },
 
-    // { nombre_periodo, nivel }
+    // { nombre, nivel }
     async agregarPeriodo(id, datos) {
         const response = await api.post(`/anios-lectivos/${id}/periodos`, datos);
         return response.data;
@@ -56,13 +56,13 @@ export const anioLectivoService = {
 };
 
 export const periodoEscolarService = {
-    // { nombre_periodo }
+    // { nombre }
     async actualizar(id, datos) {
         const response = await api.put(`/periodos-escolares/${id}`, datos);
         return response.data;
     },
 
-    // estado: 'pendiente' | 'en_curso' | 'cerrado' (cierre de cada trimestre o periodo)
+    // estado: 'pendiente' | 'activo' | 'cerrado' (cierre de cada trimestre o periodo)
     async cambiarEstado(id, estado) {
         const response = await api.put(`/periodos-escolares/${id}/estado`, { estado });
         return response.data;

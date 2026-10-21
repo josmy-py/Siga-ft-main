@@ -1,22 +1,20 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
+import Swal from "sweetalert2";
 import { useAuthStore } from "@/stores/authStore";
 import { reporteService } from "@/services/reporteService";
 import { seccionService } from "@/services/seccionService";
-import { dato, fechaLegible, fila, hoy, imprimirReporte, porcentaje, seccion, texto } from "@/components/reportes/documentoReporte";
+import { hoy } from "@/components/reportes/documentoReporte";
 
-// Portal director > Reportes > Reporte Académico (formulario de Josmy, 20/10/2026).
-// No se guarda en la base de datos: "Generar Reporte" arma el documento con lo
-// llenado y abre la impresión del navegador para guardarlo como PDF.
-// Los indicadores y las asignaturas se precargan con las boletas del periodo
-// (reporte de notas existente) y quedan editables.
+// Portal director > Reportes > Reporte Académico (formulario y diseño de PDF de
+// Josmy, 20/10/2026). El backend calcula los indicadores y las materias con las
+// boletas del período del nivel elegido (aprueba con 7) y genera el PDF con
+// dompdf; aquí se muestran solo como consulta. No se guarda en la base de datos.
 const emit = defineEmits(["cerrar"]);
 const auth = useAuthStore();
 
-// Misma nota mínima de aprobación que el backend (PromocionService::NOTA_MINIMA)
-const NOTA_MINIMA = 7;
 const NIVELES = ["Parvularia", "Educación Básica", "Bachillerato"];
-const CARGOS = ["Director"];
+const CARGOS = ["Director", "Directora"];
 
 const nivelDeGrado = (orden) => {
   if (orden === null || orden === undefined) return null;
@@ -32,131 +30,97 @@ const form = ref({
   director: "",
   correo: auth.user?.email ?? "",
   cargo: "Director",
-  total_estudiantes: "",
-  promedio_general: "",
-  porcentaje_aprobacion: "",
-  porcentaje_reprobacion: "",
   rendimiento: "",
-  mejor_asignatura: "",
-  menor_asignatura: "",
   destacados: "",
   recomendaciones: "",
   observaciones: "",
 });
 
-const secciones = ref([]);
+const indicadores = ref(null);
 const periodos = ref([]);
 const calculando = ref(false);
+const generando = ref(false);
 const avisoIndicadores = ref("");
 
-const nivelesDisponibles = computed(() => NIVELES.filter((n) => secciones.value.some((s) => s.nivel === n)));
-const periodoActual = computed(() => periodos.value.find((p) => String(p.id) === String(form.value.periodo_id)));
-
 const mensaje = (e, porDefecto) => e.response?.data?.message ?? porDefecto;
+const numero = (v) => (v === null || v === undefined ? "—" : String(Number(Number(v).toFixed(2))));
+const porcentaje = (v) => (v === null || v === undefined ? "—" : `${numero(v)} %`);
 
 onMounted(async () => {
   try {
     const { secciones: lista = [] } = await seccionService.listar();
-    secciones.value = lista.map((s) => ({ id: s.id, anio_lectivo_id: s.anio_lectivo_id, nivel: nivelDeGrado(s.grado?.orden) }));
-    form.value.nivel = nivelesDisponibles.value[0] ?? "";
+    const niveles = new Set(lista.map((s) => nivelDeGrado(s.grado?.orden)));
+    form.value.nivel = NIVELES.find((n) => niveles.has(n)) ?? "";
     const anioId = lista[0]?.anio_lectivo_id;
     if (anioId) {
       periodos.value = await reporteService.periodos(anioId);
       form.value.periodo_id = periodos.value[0]?.id ?? "";
     }
   } catch (e) {
-    avisoIndicadores.value = mensaje(e, "No se pudieron cargar las secciones y los periodos del año activo.");
+    avisoIndicadores.value = mensaje(e, "No se pudieron cargar los periodos del año activo.");
   }
 });
 
-// Indicadores del nivel en el periodo, a partir del reporte de notas de cada sección
-const calcularIndicadores = async () => {
-  const delNivel = secciones.value.filter((s) => s.nivel === form.value.nivel);
-  if (!delNivel.length || !form.value.periodo_id) return;
-  calculando.value = true;
-  avisoIndicadores.value = "";
+// Los mismos indicadores que imprime el PDF
+watch(
+  () => [form.value.nivel, form.value.periodo_id],
+  async ([nivel, periodoId]) => {
+    indicadores.value = null;
+    if (!nivel || !periodoId) return;
+    calculando.value = true;
+    avisoIndicadores.value = "";
+    try {
+      indicadores.value = await reporteService.academicoIndicadores(nivel, periodoId);
+      if (!indicadores.value.estudiantes_evaluados) avisoIndicadores.value = "Aún no hay boletas de este período en el nivel elegido.";
+    } catch (e) {
+      avisoIndicadores.value = mensaje(e, "No se pudieron calcular los indicadores.");
+    } finally {
+      calculando.value = false;
+    }
+  },
+);
+
+// Mensaje de error de una respuesta pedida como blob (422, 404...)
+const errorDeBlob = async (e) => {
   try {
-    const reportes = await Promise.all(delNivel.map((s) => reporteService.notas("director", s.id, form.value.periodo_id)));
-    const estudiantes = reportes.flatMap((r) => r.estudiantes ?? []);
-    const conNota = estudiantes.filter((e) => e.promedio !== null && e.promedio !== undefined);
-
-    const materias = {};
-    reportes.forEach((r) => {
-      (r.estudiantes ?? []).forEach((e) => {
-        (r.materias ?? []).forEach((m) => {
-          const valor = e.promedios?.[m.asignacion_id];
-          if (valor === null || valor === undefined) return;
-          materias[m.nombre] ??= [];
-          materias[m.nombre].push(Number(valor));
-        });
-      });
-    });
-    const promediosMaterias = Object.entries(materias)
-      .map(([nombre, notas]) => ({ nombre, promedio: notas.reduce((a, b) => a + b, 0) / notas.length }))
-      .sort((a, b) => b.promedio - a.promedio);
-
-    form.value.total_estudiantes = estudiantes.length;
-    if (conNota.length) {
-      const aprobados = conNota.filter((e) => Number(e.promedio) >= NOTA_MINIMA).length;
-      const promedio = conNota.reduce((a, e) => a + Number(e.promedio), 0) / conNota.length;
-      form.value.promedio_general = promedio.toFixed(2);
-      form.value.porcentaje_aprobacion = ((aprobados / conNota.length) * 100).toFixed(1);
-      form.value.porcentaje_reprobacion = (100 - (aprobados / conNota.length) * 100).toFixed(1);
-    } else {
-      form.value.promedio_general = "";
-      form.value.porcentaje_aprobacion = "";
-      form.value.porcentaje_reprobacion = "";
-      avisoIndicadores.value = "Aún no hay boletas de este periodo; los indicadores se pueden llenar a mano.";
-    }
-    if (promediosMaterias.length) {
-      const mejor = promediosMaterias[0];
-      const menor = promediosMaterias[promediosMaterias.length - 1];
-      form.value.mejor_asignatura = `${mejor.nombre} (${mejor.promedio.toFixed(2)})`;
-      form.value.menor_asignatura = `${menor.nombre} (${menor.promedio.toFixed(2)})`;
-    }
-  } catch (e) {
-    avisoIndicadores.value = mensaje(e, "No se pudieron calcular los indicadores; se pueden llenar a mano.");
-  } finally {
-    calculando.value = false;
+    return JSON.parse(await e.response.data.text()).message;
+  } catch {
+    return null;
   }
 };
 
-watch(() => [form.value.nivel, form.value.periodo_id], calcularIndicadores);
-
-const generar = () => {
+const generar = async () => {
   const f = form.value;
-  imprimirReporte({
-    titulo: "Reporte Académico",
-    subtitulo: "Registro y consolidación de información académica y administrativa.",
-    cuerpo: [
-      seccion("Identificación", fila(dato("Nivel Académico", f.nivel), dato("Período", periodoActual.value?.nombre_periodo), dato("Fecha", fechaLegible(f.fecha)))),
-      seccion("Responsable", fila(dato("Nombre del Director", f.director), dato("Correo Electrónico", f.correo), dato("Cargo", f.cargo))),
-      seccion(
-        "Indicadores Académicos",
-        fila(
-          dato("Total Estudiantes", f.total_estudiantes),
-          dato("Promedio General", f.promedio_general),
-          dato("% Aprobación", porcentaje(f.porcentaje_aprobacion)),
-          dato("% Reprobación", porcentaje(f.porcentaje_reprobacion)),
-        ),
-      ),
-      seccion("Rendimiento Académico", texto(f.rendimiento)),
-      seccion(
-        "Asignaturas con Mayor y Menor Rendimiento",
-        fila(dato("Asignatura con mejor rendimiento", f.mejor_asignatura), dato("Asignatura con menor rendimiento", f.menor_asignatura)),
-      ),
-      seccion("Estudiantes Destacados", texto(f.destacados)),
-      seccion("Recomendaciones Académicas", texto(f.recomendaciones)),
-      seccion("Observaciones Generales", texto(f.observaciones)),
-    ].join(""),
-    firma: [f.director, f.cargo],
-  });
+  generando.value = true;
+  try {
+    const pdf = await reporteService.academicoPdf({
+      nivel: f.nivel,
+      periodo_escolar_id: f.periodo_id,
+      fecha: f.fecha,
+      nombre: f.director,
+      cargo: f.cargo,
+      correo: f.correo,
+      rendimiento_academico: f.rendimiento,
+      estudiantes_destacados: f.destacados,
+      recomendaciones: f.recomendaciones,
+      observaciones: f.observaciones,
+    });
+    const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    Swal.fire({ icon: "error", title: (await errorDeBlob(e)) ?? "No se pudo generar el reporte." });
+  } finally {
+    generando.value = false;
+  }
 };
 
 const entrada =
   "w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400";
+const soloLectura = `${entrada} bg-gray-50 text-gray-700`;
 const area = `${entrada} h-24 resize-y`;
 const subtitulo = "flex items-center gap-2 text-lg font-semibold text-gray-700 mt-8 mb-3";
+const etiqueta = "block text-xs text-gray-500 mb-1";
 </script>
 
 <template>
@@ -187,7 +151,7 @@ const subtitulo = "flex items-center gap-2 text-lg font-semibold text-gray-700 m
           <span class="block text-sm text-gray-600 mb-1">Período</span>
           <select v-model="form.periodo_id" :class="entrada" required>
             <option value="" disabled>{{ periodos.length ? "Seleccione" : "Sin periodos" }}</option>
-            <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre_periodo }}</option>
+            <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
           </select>
         </label>
         <label class="block">
@@ -211,25 +175,25 @@ const subtitulo = "flex items-center gap-2 text-lg font-semibold text-gray-700 m
       </h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label class="block">
-          <span class="block text-xs text-gray-500 mb-1">Total Estudiantes</span>
-          <input v-model="form.total_estudiantes" type="number" min="0" :class="entrada" placeholder="Total Estudiantes" />
+          <span :class="etiqueta">Total Estudiantes</span>
+          <input :value="indicadores ? indicadores.total_estudiantes : '—'" :class="soloLectura" readonly />
         </label>
         <label class="block">
-          <span class="block text-xs text-gray-500 mb-1">Promedio General</span>
-          <input v-model="form.promedio_general" type="number" min="0" max="10" step="0.01" :class="entrada" placeholder="Promedio General" />
+          <span :class="etiqueta">Promedio General</span>
+          <input :value="numero(indicadores?.promedio_general)" :class="soloLectura" readonly />
         </label>
         <label class="block">
-          <span class="block text-xs text-gray-500 mb-1">% Aprobación</span>
-          <input v-model="form.porcentaje_aprobacion" type="number" min="0" max="100" step="0.1" :class="entrada" placeholder="% Aprobación" />
+          <span :class="etiqueta">% Aprobación</span>
+          <input :value="porcentaje(indicadores?.porcentaje_aprobacion)" :class="soloLectura" readonly />
         </label>
         <label class="block">
-          <span class="block text-xs text-gray-500 mb-1">% Reprobación</span>
-          <input v-model="form.porcentaje_reprobacion" type="number" min="0" max="100" step="0.1" :class="entrada" placeholder="% Reprobación" />
+          <span :class="etiqueta">% Reprobación</span>
+          <input :value="porcentaje(indicadores?.porcentaje_reprobacion)" :class="soloLectura" readonly />
         </label>
       </div>
       <p v-if="avisoIndicadores" class="mt-2 text-xs text-amber-700">{{ avisoIndicadores }}</p>
       <p v-else class="mt-2 text-xs text-gray-500">
-        Se calculan con las boletas del periodo (aprobado con promedio de {{ NOTA_MINIMA }} o más); se pueden corregir.
+        Se calculan con las boletas del período del nivel elegido (aprobado con promedio de 7 o más), igual que en el PDF.
       </p>
 
       <h3 :class="subtitulo"><i class="pi pi-book text-blue-500"></i>Rendimiento Académico</h3>
@@ -238,20 +202,20 @@ const subtitulo = "flex items-center gap-2 text-lg font-semibold text-gray-700 m
       <h3 :class="subtitulo"><i class="pi pi-list text-orange-500"></i>Asignaturas con Mayor y Menor Rendimiento</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label class="block">
-          <span class="block text-xs text-gray-500 mb-1">Asignatura con mejor rendimiento</span>
-          <input v-model="form.mejor_asignatura" :class="entrada" placeholder="Asignatura con mejor rendimiento" />
+          <span :class="etiqueta">Asignatura con mayor rendimiento</span>
+          <input :value="indicadores?.materia_mayor ?? '—'" :class="soloLectura" readonly />
         </label>
         <label class="block">
-          <span class="block text-xs text-gray-500 mb-1">Asignatura con menor rendimiento</span>
-          <input v-model="form.menor_asignatura" :class="entrada" placeholder="Asignatura con menor rendimiento" />
+          <span :class="etiqueta">Asignatura con menor rendimiento</span>
+          <input :value="indicadores?.materia_menor ?? '—'" :class="soloLectura" readonly />
         </label>
       </div>
 
       <h3 :class="subtitulo"><i class="pi pi-star-fill text-yellow-500"></i>Estudiantes Destacados</h3>
-      <textarea v-model="form.destacados" :class="area" placeholder="Listado o descripción de estudiantes destacados..."></textarea>
+      <textarea v-model="form.destacados" :class="area" placeholder="Un estudiante por línea, por ejemplo: Ana López - Sexto Grado"></textarea>
 
       <h3 :class="subtitulo"><i class="pi pi-lightbulb text-amber-500"></i>Recomendaciones Académicas</h3>
-      <textarea v-model="form.recomendaciones" :class="area" placeholder="Acciones y recomendaciones para mejorar el rendimiento académico..."></textarea>
+      <textarea v-model="form.recomendaciones" :class="area" placeholder="Una recomendación por línea..."></textarea>
 
       <h3 :class="subtitulo"><i class="pi pi-comment text-gray-500"></i>Observaciones Generales</h3>
       <textarea v-model="form.observaciones" :class="area" placeholder="Observaciones adicionales..."></textarea>
@@ -260,8 +224,8 @@ const subtitulo = "flex items-center gap-2 text-lg font-semibold text-gray-700 m
         <button type="button" class="px-5 py-2 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200" @click="emit('cerrar')">
           Cancelar
         </button>
-        <button type="submit" class="px-5 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700">
-          <i class="pi pi-file-pdf mr-2"></i>Generar Reporte
+        <button type="submit" :disabled="generando" class="px-5 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50">
+          <i :class="['pi mr-2', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Reporte
         </button>
       </div>
     </form>

@@ -30,7 +30,7 @@ export const asignacionService = {
   },
 
   // Guarda de una vez la carga del docente en el año: crea las marcadas y quita las
-  // desmarcadas. items: [{ seccion_id, asignatura_id }]. Todo o nada.
+  // desmarcadas. items: [{ seccion_id, plan_asignatura_id }]. Todo o nada.
   async guardarCarga(profesorId, anioLectivoId, items) {
     const { data } = await api.put(`/profesores/${profesorId}/carga`, {
       anio_lectivo_id: anioLectivoId,

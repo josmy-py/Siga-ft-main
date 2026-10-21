@@ -123,7 +123,7 @@ const generar = () => {
       seccion(
         "Datos generales",
         fila(dato("Estudiante", e?.estudiante?.nombre), dato("NIE", e?.estudiante?.nie)) +
-          fila(dato("Grado", gradoActual.value?.nombre), dato("Sección", seccionActual.value?.nombre), dato("Período", periodoActual.value?.nombre_periodo)) +
+          fila(dato("Grado", gradoActual.value?.nombre), dato("Sección", seccionActual.value?.nombre), dato("Período", periodoActual.value?.nombre)) +
           fila(dato("Profesor responsable", profesorResponsable.value)),
       ),
       seccion(
@@ -190,7 +190,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
             <i :class="[icono, 'pi-clock']"></i>
             <select v-model="form.periodo_id" :class="conIcono" required>
               <option value="" disabled>Selecciona un período</option>
-              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre_periodo }}</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
             </select>
           </span>
         </label>

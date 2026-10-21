@@ -42,4 +42,24 @@ export const reporteService = {
     })
     return data
   },
+
+  // Reporte Académico (director): indicadores del nivel en el período (boletas, aprueba con 7)
+  async academicoIndicadores(nivel, periodoId) {
+    const { data } = await api.get('/reportes/academico/indicadores', {
+      params: { nivel, periodo_escolar_id: periodoId },
+    })
+    return data
+  },
+
+  // Reporte Académico (director): PDF generado con dompdf en el backend
+  async academicoPdf(datos) {
+    const { data } = await api.post('/reportes/academico/pdf', datos, { responseType: 'blob' })
+    return data
+  },
+
+  // Informe Profesor (docente): PDF generado con dompdf en el backend
+  async informeProfesorPdf(datos) {
+    const { data } = await api.post('/docente/reportes/informe-profesor/pdf', datos, { responseType: 'blob' })
+    return data
+  },
 }

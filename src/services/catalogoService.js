@@ -30,12 +30,20 @@ export const planEstudioService = {
     }
 };
 
-export const asignaturaService = {
-    ...baseService('/asignaturas'),     // { nombre, plan_estudio_id } (nombre único dentro del plan)
+// Diagrama ER (21/10/2026): catálogo de asignaturas (solo nombre, sin repetidos)
+// y plan_asignaturas, que pone cada asignatura en uno o varios planes.
+export const asignaturaService = baseService('/asignaturas');   // { nombre }
 
-    async delPlan(planEstudioId) {
-        const response = await api.get('/asignaturas', { params: { plan_estudio_id: planEstudioId } });
-        return response.data.asignaturas;
+export const planAsignaturaService = {
+    // create: { plan_estudio_id, nombre } (si la asignatura ya existe en el catálogo se reutiliza)
+    // update: { nombre } (cambia la materia solo en ese plan)
+    ...baseService('/plan-asignaturas'),
+
+    // [{ id, plan_estudio_id, asignatura_id, nombre, plan_estudio }]; sin plan, las de todos
+    async delPlan(planEstudioId = null) {
+        const params = planEstudioId ? { plan_estudio_id: planEstudioId } : {};
+        const response = await api.get('/plan-asignaturas', { params });
+        return response.data.plan_asignaturas;
     }
 };
 

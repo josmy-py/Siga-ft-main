@@ -60,7 +60,7 @@ const generar = () => {
     titulo: "Reporte del Personal Docente",
     subtitulo: "Registro y consolidación de información sobre el personal",
     cuerpo: [
-      seccion("Identificación", fila(dato("Período", periodoActual.value?.nombre_periodo), dato("Fecha", fechaLegible(f.fecha)), dato("Director", f.director))),
+      seccion("Identificación", fila(dato("Período", periodoActual.value?.nombre), dato("Fecha", fechaLegible(f.fecha)), dato("Director", f.director))),
       seccion(
         "Estadísticas Generales",
         fila(dato("Total de Docentes", f.total_docentes), dato("Docentes Activos", f.docentes_activos), dato("Docentes Ausentes", f.docentes_ausentes)),
@@ -110,7 +110,7 @@ const etiqueta = "block text-xs text-gray-500 mb-1";
           <span :class="etiqueta">Período</span>
           <select v-model="form.periodo_id" :class="entrada" required>
             <option value="" disabled>{{ periodos.length ? "Seleccione" : "Sin periodos" }}</option>
-            <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre_periodo }}</option>
+            <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
           </select>
         </label>
         <label class="block">

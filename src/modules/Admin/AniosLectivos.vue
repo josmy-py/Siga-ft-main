@@ -10,10 +10,10 @@ const ESTADOS_ANIO = {
   cierre: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
 };
 
-// Estado de cada periodo: nace pendiente; el director lo pone en curso y lo cierra al terminar el trimestre
+// Estado de cada periodo: nace pendiente; el director lo activa y lo cierra al terminar el trimestre
 const ESTADOS_PERIODO = {
   pendiente: { etiqueta: "Pendiente", clase: "bg-amber-100 text-amber-700" },
-  en_curso: { etiqueta: "En curso", clase: "bg-green-100 text-green-700" },
+  activo: { etiqueta: "Activo", clase: "bg-green-100 text-green-700" },
   cerrado: { etiqueta: "Cerrado", clase: "bg-slate-200 text-slate-600" },
 };
 
@@ -32,7 +32,7 @@ const erroresAnio = ref({});
 const edicionPeriodos = ref({});
 const erroresPeriodos = ref({});
 
-// Formulario "Agregar periodo": campos del diagrama (nombre_periodo y nivel)
+// Formulario "Agregar periodo": campos del diagrama (nombre y nivel)
 const MAX_PERIODOS = 6;
 const formPeriodo = ref(null);
 const erroresPeriodo = ref({});
@@ -53,7 +53,7 @@ const prepararPeriodos = () => {
   edicionPeriodos.value = Object.fromEntries(
     (seleccionado.value?.periodos ?? []).map((p) => [
       p.id,
-      { nombre_periodo: p.nombre_periodo ?? "" },
+      { nombre: p.nombre ?? "" },
     ]),
   );
   erroresPeriodos.value = {};
@@ -183,7 +183,7 @@ const NOMBRES_SUGERIDOS = ["Primer trimestre", "Segundo trimestre", "Tercer trim
 
 const abrirFormPeriodo = () => {
   const nivel = nivelesLibres.value[0] ?? 1;
-  formPeriodo.value = { nombre_periodo: NOMBRES_SUGERIDOS[nivel - 1] ?? "", nivel };
+  formPeriodo.value = { nombre: NOMBRES_SUGERIDOS[nivel - 1] ?? "", nivel };
   erroresPeriodo.value = {};
 };
 
@@ -220,23 +220,23 @@ const guardarPeriodo = async (periodo) => {
   }
 };
 
-const hayPeriodoEnCurso = computed(() => (seleccionado.value?.periodos ?? []).some((p) => p.estado === "en_curso"));
+const hayPeriodoEnCurso = computed(() => (seleccionado.value?.periodos ?? []).some((p) => p.estado === "activo"));
 
 const CAMBIOS_ESTADO = {
-  en_curso: { pregunta: (p) => `¿Iniciar ${p.nombre_periodo}?`, texto: "Queda en curso: los docentes registran sus notas y conducta." },
-  cerrado: { pregunta: (p) => `¿Cerrar ${p.nombre_periodo}?`, texto: "Ya no se podrán registrar ni modificar notas ni conducta en este periodo." },
-  pendiente: { pregunta: (p) => `¿Volver ${p.nombre_periodo} a pendiente?`, texto: "Úselo si lo inició por error." },
+  activo: { pregunta: (p) => `¿Iniciar ${p.nombre}?`, texto: "Queda activo: los docentes registran sus notas y conducta." },
+  cerrado: { pregunta: (p) => `¿Cerrar ${p.nombre}?`, texto: "Ya no se podrán registrar ni modificar notas ni conducta en este periodo." },
+  pendiente: { pregunta: (p) => `¿Volver ${p.nombre} a pendiente?`, texto: "Úselo si lo inició por error." },
 };
 
 const cambiarEstadoPeriodo = async (periodo, estado) => {
   const cambio = CAMBIOS_ESTADO[estado];
-  const pregunta = periodo.estado === "cerrado" ? `¿Reabrir ${periodo.nombre_periodo}?` : cambio.pregunta(periodo);
+  const pregunta = periodo.estado === "cerrado" ? `¿Reabrir ${periodo.nombre}?` : cambio.pregunta(periodo);
   if (!(await confirmar(pregunta, cambio.texto))) return;
   await ejecutar(() => periodoEscolarService.cambiarEstado(periodo.id, estado), "No se pudo cambiar el estado del periodo");
 };
 
 const eliminarPeriodo = async (periodo) => {
-  if (!(await confirmar(`¿Eliminar ${periodo.nombre_periodo}?`, "Solo se elimina si no tiene notas ni conducta registradas."))) return;
+  if (!(await confirmar(`¿Eliminar ${periodo.nombre}?`, "Solo se elimina si no tiene notas ni conducta registradas."))) return;
   await ejecutar(() => periodoEscolarService.eliminar(periodo.id), "No se pudo eliminar el periodo");
 };
 
@@ -418,8 +418,8 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
 
               <label class="text-sm text-slate-600 md:col-span-2">
                 Nombre del periodo
-                <input v-model.trim="formPeriodo.nombre_periodo" maxlength="50" placeholder="Primer trimestre" :class="entradaInput" required />
-                <span v-if="erroresPeriodo.nombre_periodo" class="text-red-600 text-xs">{{ erroresPeriodo.nombre_periodo }}</span>
+                <input v-model.trim="formPeriodo.nombre" maxlength="50" placeholder="Primer trimestre" :class="entradaInput" required />
+                <span v-if="erroresPeriodo.nombre" class="text-red-600 text-xs">{{ erroresPeriodo.nombre }}</span>
               </label>
 
               <label class="text-sm text-slate-600">
@@ -464,12 +464,12 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
 
                     <template v-if="seleccionado.estado !== 'cierre' && edicionPeriodos[periodo.id]">
                       <td class="px-3 py-3 border-b border-slate-200">
-                        <input v-model.trim="edicionPeriodos[periodo.id].nombre_periodo" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
-                        <span v-if="erroresPeriodos[periodo.id]?.nombre_periodo" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre_periodo }}</span>
+                        <input v-model.trim="edicionPeriodos[periodo.id].nombre" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
+                        <span v-if="erroresPeriodos[periodo.id]?.nombre" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre }}</span>
                       </td>
                     </template>
                     <template v-else>
-                      <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nombre_periodo }}</td>
+                      <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nombre }}</td>
                     </template>
 
                     <td class="px-3 py-3 border-b border-slate-200">
@@ -480,14 +480,14 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
 
                     <td class="px-3 py-3 border-b border-slate-200">
                       <div class="flex flex-wrap gap-2">
-                        <!-- Estado: solo con el año activo y un periodo en curso a la vez -->
+                        <!-- Estado: solo con el año activo y un periodo activo a la vez -->
                         <template v-if="seleccionado.estado === 'activo'">
-                          <button v-if="periodo.estado !== 'en_curso' && !hayPeriodoEnCurso" :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'en_curso')"
+                          <button v-if="periodo.estado !== 'activo' && !hayPeriodoEnCurso" :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'activo')"
                             :class="[botonBase, 'border-green-600 text-green-700 hover:bg-green-600 hover:text-white']">
                             <i :class="periodo.estado === 'cerrado' ? 'pi pi-replay' : 'pi pi-play'"></i>
                             {{ periodo.estado === "cerrado" ? "Reabrir" : "Iniciar" }}
                           </button>
-                          <template v-if="periodo.estado === 'en_curso'">
+                          <template v-if="periodo.estado === 'activo'">
                             <button :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'cerrado')"
                               :class="[botonBase, 'border-slate-500 text-slate-700 hover:bg-slate-600 hover:text-white']">
                               <i class="pi pi-lock"></i> Cerrar

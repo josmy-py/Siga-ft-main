@@ -1,20 +1,23 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
+import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
-import { dato, fechaLegible, fila, hoy, imprimirReporte, seccion, texto } from "@/components/reportes/documentoReporte";
+import { hoy } from "@/components/reportes/documentoReporte";
 
 // Portal docente > Reportes > Informe Profesor (formulario de Josmy, 20/10/2026).
 // Grado, sección y período salen de la carga académica del docente que inició
-// sesión; el nombre del profesor se precarga y es editable. No se guarda en la
-// base de datos: "Generar Informe" abre el documento para imprimirlo o
-// guardarlo como PDF.
+// sesión; el nombre del profesor se precarga y es editable. "Generar Informe"
+// abre el PDF que arma el backend con dompdf (diseño de Josmy, 21/10/2026); el
+// backend vuelve a validar que la sección sea del docente. No se guarda en la
+// base de datos.
 const emit = defineEmits(["cerrar"]);
 
 const carga = ref([]); // [{ id, nombre, grado_id, grado }]
 const periodos = ref([]);
 const nombreProfesor = ref("");
 const aviso = ref("");
+const generando = ref(false);
 
 const inicial = () => ({
   fecha: hoy(),
@@ -34,10 +37,6 @@ const grados = computed(() => {
   return [...unicos].map(([id, nombre]) => ({ id, nombre }));
 });
 const seccionesDelGrado = computed(() => carga.value.filter((s) => String(s.grado_id) === String(form.value.grado_id)));
-const gradoActual = computed(() => grados.value.find((g) => String(g.id) === String(form.value.grado_id)));
-const seccionActual = computed(() => carga.value.find((s) => String(s.id) === String(form.value.seccion_id)));
-const periodoActual = computed(() => periodos.value.find((p) => String(p.id) === String(form.value.periodo_id)));
-
 watch(
   () => form.value.grado_id,
   () => {
@@ -67,23 +66,37 @@ const limpiar = () => {
   form.value = inicial();
 };
 
-const generar = () => {
+// Mensaje de error de una respuesta pedida como blob (422, 404...)
+const errorDeBlob = async (e) => {
+  try {
+    return JSON.parse(await e.response.data.text()).message;
+  } catch {
+    return null;
+  }
+};
+
+const generar = async () => {
   const f = form.value;
-  imprimirReporte({
-    titulo: "Informe Profesor",
-    subtitulo: "Registro de actividades y observaciones realizadas por el profesor",
-    cuerpo: [
-      seccion(
-        "Datos generales",
-        fila(dato("Fecha", fechaLegible(f.fecha)), dato("Grado", gradoActual.value?.nombre), dato("Sección", seccionActual.value?.nombre)) +
-          fila(dato("Prof. Responsable", f.profesor), dato("Período Académico", periodoActual.value?.nombre_periodo)) +
-          fila(dato("Asunto", f.asunto)),
-      ),
-      seccion("Desarrollo del Informe", texto(f.desarrollo)),
-      seccion("Observaciones", texto(f.observaciones)),
-    ].join(""),
-    firma: [f.profesor, "Docente"],
-  });
+  generando.value = true;
+  try {
+    const pdf = await reporteService.informeProfesorPdf({
+      fecha: f.fecha,
+      grado_id: f.grado_id,
+      seccion_id: f.seccion_id,
+      periodo_escolar_id: f.periodo_id,
+      profesor: f.profesor,
+      asunto: f.asunto,
+      desarrollo: f.desarrollo,
+      observaciones: f.observaciones,
+    });
+    const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    Swal.fire({ icon: "error", title: (await errorDeBlob(e)) ?? "No se pudo generar el informe." });
+  } finally {
+    generando.value = false;
+  }
 };
 
 const etiqueta = "block text-sm font-semibold text-gray-700 mb-1";
@@ -124,7 +137,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
         <span :class="etiqueta">Período Académico</span>
         <select v-model="form.periodo_id" :class="entrada" required>
           <option value="" disabled>Seleccione un período</option>
-          <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre_periodo }}</option>
+          <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
         </select>
       </label>
     </div>
@@ -151,7 +164,9 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <button type="button" :class="[boton, 'bg-gray-100 text-gray-700 hover:bg-gray-200']" @click="emit('cerrar')">
         <i class="pi pi-times"></i>Cancelar
       </button>
-      <button type="submit" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700']">Generar Informe</button>
+      <button type="submit" :disabled="generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
+        <i :class="['pi', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Informe
+      </button>
     </div>
   </form>
 </template>
