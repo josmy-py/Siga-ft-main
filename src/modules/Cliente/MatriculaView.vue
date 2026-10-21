@@ -5,6 +5,8 @@ import Swal from "sweetalert2";
 import { estudianteService } from "../../services/estudianteService";
 import { matriculaService, TURNOS } from "../../services/matriculaService";
 import { discapacidadService, enfermedadService, especialidadService } from "../../services/catalogoService";
+import { familiaService, PARENTESCOS_ENCARGADO } from "../../services/familiaService";
+import { soloLetras } from "./nombres";
 import { erroresCampos, mensajeError } from "../../services/api";
 
 // M6: solicitud de matrícula del encargado (API real). Primero se elige el tipo de
@@ -12,6 +14,9 @@ import { erroresCampos, mensajeError } from "../../services/api";
 // llena la ficha. El grado y el turno elegidos sirven a la dirección para asignar
 // la sección (solo se ofrecen turnos con cupo). El medicamento se escribe aquí pero
 // se guarda en la tabla enfermedades.
+// Pestaña Encargado: si ninguno de los padres registrados es el responsable (padres.user_id
+// de la cuenta), se registra el encargado en la tabla encargados con el user_id de la cuenta.
+// Si ya hay responsable solo se muestran sus datos.
 const route = useRoute();
 const router = useRouter();
 
@@ -36,6 +41,10 @@ const errores = ref({});
 const errorOpciones = ref("");
 const fotoUrl = ref(null);
 const discapacidadElegida = ref("");
+const pestana = ref("matricula");
+const encargado = reactive({ nombre: "", parentesco: "", dui: "", telefono: "", direccion: "" });
+const erroresEncargado = ref({});
+const guardandoEncargado = ref(false);
 
 const form = reactive({
   estudiante_id: "",
@@ -54,6 +63,7 @@ const form = reactive({
 const etiquetaTipo = computed(() => TIPOS.find((t) => t.valor === tipo.value)?.titulo ?? "");
 const esNuevo = computed(() => tipo.value === "Nuevo ingreso");
 const responsable = computed(() => opciones.value?.responsable ?? null);
+const faltaEncargado = computed(() => !!responsable.value?.falta);
 const grado = computed(() => opciones.value?.grados?.find((g) => g.id === form.grado_id) ?? null);
 const tipoNoCorresponde = computed(() => opciones.value?.ingreso && opciones.value.ingreso !== tipo.value);
 // NIE: el encargado lo ingresa en Reingreso o si viene de otra institución; en Nuevo ingreso
@@ -78,6 +88,8 @@ const discapacidadesElegidas = computed(() => discapacidades.value.filter((d) =>
 const puedeEnviar = computed(
   () => opciones.value?.permitido && !tipoNoCorresponde.value && !responsable.value?.falta && !enviando.value
 );
+// Con todo listo menos el encargado, el botón sigue activo y lleva a la pestaña Encargado
+const puedePulsar = computed(() => puedeEnviar.value || (opciones.value?.permitido && !tipoNoCorresponde.value && faltaEncargado.value && !enviando.value));
 
 onMounted(async () => {
   try {
@@ -196,7 +208,16 @@ const validar = () => {
 };
 
 const enviar = async () => {
-  if (!puedeEnviar.value || !validar()) return;
+  // Sin responsable no se envía: se lleva a la pestaña Encargado para registrarlo
+  if (faltaEncargado.value) {
+    pestana.value = "encargado";
+    Swal.fire({ icon: "warning", title: "Registre al encargado del estudiante antes de confirmar la matrícula." });
+    return;
+  }
+  if (!puedeEnviar.value || !validar()) {
+    pestana.value = "matricula";
+    return;
+  }
   enviando.value = true;
   try {
     const { message } = await matriculaService.solicitar({
@@ -223,6 +244,56 @@ const enviar = async () => {
     enviando.value = false;
   }
 };
+
+// Mismas reglas que la API (EncargadoController::validar)
+const validarEncargado = () => {
+  const e = {};
+  const nombre = encargado.nombre.trim();
+  if (!nombre) e.nombre = "El nombre es obligatorio.";
+  else if (nombre.length > 80) e.nombre = "El nombre no debe tener más de 80 caracteres.";
+  if (!encargado.parentesco) e.parentesco = "El parentesco es obligatorio.";
+  if (!encargado.dui.trim()) e.dui = "El DUI es obligatorio.";
+  else if (!/^[0-9]{8}-?[0-9]$/.test(encargado.dui.trim())) e.dui = "El DUI debe tener el formato 00000000-0.";
+  if (!encargado.telefono.trim()) e.telefono = "El teléfono es obligatorio.";
+  else if (!/^[267][0-9]{3}-?[0-9]{4}$/.test(encargado.telefono.trim())) e.telefono = "El teléfono debe tener 8 dígitos y empezar con 2, 6 o 7.";
+  if (!encargado.direccion.trim()) e.direccion = "La dirección es obligatoria.";
+  else if (encargado.direccion.trim().length > 100) e.direccion = "La dirección no debe tener más de 100 caracteres.";
+  erroresEncargado.value = e;
+  return Object.keys(e).length === 0;
+};
+
+const agregarEncargado = async () => {
+  if (guardandoEncargado.value || !validarEncargado()) return;
+  guardandoEncargado.value = true;
+  try {
+    const { message } = await familiaService.registrarEncargado({
+      nombre: encargado.nombre.trim(),
+      parentesco: encargado.parentesco,
+      dui: encargado.dui.trim(),
+      telefono: encargado.telefono.trim(),
+      direccion: encargado.direccion.trim(),
+    });
+    // Ya hay responsable: se vuelve a consultar para mostrar sus datos y ocultar el formulario
+    opciones.value = await matriculaService.opciones(form.estudiante_id);
+    delete errores.value.encargado_id;
+    Object.assign(encargado, { nombre: "", parentesco: "", dui: "", telefono: "", direccion: "" });
+    await Swal.fire({ icon: "success", title: message, timer: 2000, showConfirmButton: false });
+  } catch (e) {
+    erroresEncargado.value = erroresCampos(e);
+    if (!Object.keys(erroresEncargado.value).length) {
+      Swal.fire({ icon: "error", title: mensajeError(e, "No se pudo registrar al encargado.") });
+    }
+  } finally {
+    guardandoEncargado.value = false;
+  }
+};
+
+for (const campo of ["nombre", "parentesco", "dui", "telefono", "direccion"]) {
+  watch(() => encargado[campo], () => delete erroresEncargado.value[campo]);
+}
+
+const claseEncargado = (campo) =>
+  `w-full border rounded-lg px-3 py-2 text-sm bg-white ${erroresEncargado.value[campo] ? "border-red-400 bg-red-50" : "border-gray-300"}`;
 
 const cancelarTodo = () => router.push({ name: "matricula-cliente" });
 
@@ -262,7 +333,22 @@ const claseCampo = (campo) =>
 
       <div v-if="cargando" class="text-gray-500 px-2">Cargando…</div>
 
-      <section v-else class="bg-white rounded-2xl shadow-sm p-6 space-y-8">
+      <!-- Pestañas: Matrícula y Encargado -->
+      <div v-if="!cargando" class="grid grid-cols-2 bg-gray-100 rounded-t-2xl overflow-hidden -mb-6">
+        <button
+          v-for="p in [{ id: 'matricula', texto: 'Matrícula' }, { id: 'encargado', texto: 'Encargado' }]"
+          :key="p.id"
+          type="button"
+          class="py-3 text-sm font-semibold border transition"
+          :class="pestana === p.id ? 'bg-white border-blue-800 text-blue-900' : 'border-transparent text-gray-600 hover:bg-gray-200'"
+          @click="pestana = p.id"
+        >
+          {{ p.texto }}
+          <i v-if="p.id === 'encargado' && faltaEncargado" class="pi pi-exclamation-circle text-amber-600 ml-1" title="Falta registrar al encargado"></i>
+        </button>
+      </div>
+
+      <section v-if="!cargando" v-show="pestana === 'matricula'" class="bg-white rounded-b-2xl shadow-sm p-6 space-y-8">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <!-- Foto -->
           <div class="flex flex-col items-center gap-3">
@@ -389,7 +475,7 @@ const claseCampo = (campo) =>
             <div v-if="responsable" class="text-sm rounded-xl p-3" :class="responsable.falta ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-700'">
               <template v-if="responsable.falta">
                 {{ responsable.falta }}
-                <router-link class="underline ml-1" :to="{ name: 'perfil-cliente' }">Ir a Mi perfil</router-link>
+                <button type="button" class="underline ml-1" @click="pestana = 'encargado'">Ir a la pestaña Encargado</button>
               </template>
               <template v-else>
                 <b>Responsable:</b> {{ responsable.nombre }} ({{ responsable.parentesco }}, DUI {{ responsable.dui }})
@@ -444,11 +530,95 @@ const claseCampo = (campo) =>
         </div>
       </section>
 
-      <div class="flex justify-between">
+      <!-- Pestaña Encargado (tabla encargados, como el diagrama) -->
+      <section v-if="!cargando" v-show="pestana === 'encargado'" class="bg-white rounded-b-2xl shadow-sm p-6">
+        <div class="max-w-3xl mx-auto space-y-6">
+          <h2 class="font-semibold text-gray-800">Datos del Responsable</h2>
+
+          <p v-if="!form.estudiante_id" class="text-sm rounded-xl p-4 bg-gray-50 text-gray-600">
+            Seleccione primero al estudiante en la pestaña Matrícula para ver quién es su responsable.
+          </p>
+          <p v-else-if="cargandoOpciones" class="text-sm text-gray-500">Consultando…</p>
+
+          <!-- Ya tiene responsable (padre o madre de la cuenta, o encargado registrado): no se pide el formulario -->
+          <div v-else-if="responsable && !responsable.falta" class="rounded-xl border border-gray-200 p-5 text-sm text-gray-700 space-y-3">
+            <p class="text-gray-500">
+              {{ responsable.tipo === "padre"
+                ? "El responsable del estudiante es su padre o madre registrado en esta cuenta: no se registra un encargado."
+                : "El responsable del estudiante es el encargado registrado en esta cuenta." }}
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <span><b>Nombre:</b> {{ responsable.nombre }}</span>
+              <span><b>Parentesco:</b> {{ responsable.parentesco }}</span>
+              <span><b>DUI:</b> {{ responsable.dui }}</span>
+              <span v-if="responsable.telefono"><b>Teléfono:</b> {{ responsable.telefono }}</span>
+              <span v-if="responsable.direccion" class="md:col-span-2"><b>Dirección:</b> {{ responsable.direccion }}</span>
+            </div>
+          </div>
+
+          <!-- Ninguno de los padres es el responsable: el encargado es obligatorio -->
+          <template v-else-if="faltaEncargado">
+            <p class="text-sm rounded-xl p-4 bg-amber-50 text-amber-800">
+              Ninguno de los padres registrados es el responsable del estudiante. Registre al encargado: es obligatorio para confirmar la matrícula.
+            </p>
+            <div class="rounded-xl border border-gray-200 p-6 space-y-4">
+              <h3 class="font-semibold text-gray-800">Datos del Responsable</h3>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Nombre Completo del Responsable *</label>
+                <input
+                  :value="encargado.nombre"
+                  maxlength="80"
+                  placeholder="Ej. María Elena López"
+                  :class="claseEncargado('nombre')"
+                  @input="encargado.nombre = soloLetras($event.target.value); $event.target.value = encargado.nombre"
+                />
+                <p v-if="erroresEncargado.nombre" class="text-red-600 text-xs mt-1">{{ erroresEncargado.nombre }}</p>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm text-gray-700 mb-1">Parentesco con el Alumno *</label>
+                  <select v-model="encargado.parentesco" :class="claseEncargado('parentesco')">
+                    <option value="">Seleccionar parentesco</option>
+                    <option v-for="p in PARENTESCOS_ENCARGADO" :key="p" :value="p">{{ p }}</option>
+                  </select>
+                  <p v-if="erroresEncargado.parentesco" class="text-red-600 text-xs mt-1">{{ erroresEncargado.parentesco }}</p>
+                </div>
+                <div>
+                  <label class="block text-sm text-gray-700 mb-1">DUI *</label>
+                  <input v-model="encargado.dui" maxlength="10" inputmode="numeric" placeholder="00000000-0" :class="claseEncargado('dui')" />
+                  <p v-if="erroresEncargado.dui" class="text-red-600 text-xs mt-1">{{ erroresEncargado.dui }}</p>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Teléfono de Contacto *</label>
+                <input v-model="encargado.telefono" maxlength="9" inputmode="numeric" placeholder="7000-0000" :class="claseEncargado('telefono')" />
+                <p v-if="erroresEncargado.telefono" class="text-red-600 text-xs mt-1">{{ erroresEncargado.telefono }}</p>
+              </div>
+              <div>
+                <label class="block text-sm text-gray-700 mb-1">Dirección *</label>
+                <input v-model="encargado.direccion" maxlength="100" placeholder="Ej. Colonia Las Flores, calle principal, casa 5" :class="claseEncargado('direccion')" />
+                <p v-if="erroresEncargado.direccion" class="text-red-600 text-xs mt-1">{{ erroresEncargado.direccion }}</p>
+              </div>
+              <div class="flex justify-end">
+                <button
+                  type="button"
+                  :disabled="guardandoEncargado"
+                  class="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                  @click="agregarEncargado"
+                >
+                  <i class="pi pi-check"></i> {{ guardandoEncargado ? "Guardando…" : "Agregar Encargado" }}
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <div v-if="!cargando" class="flex justify-between">
         <button type="button" class="px-5 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-100" @click="cancelarTodo">Cancelar Todo</button>
         <button
           type="submit"
-          :disabled="!puedeEnviar"
+          :disabled="!puedePulsar"
           class="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
         >
           {{ enviando ? "Enviando…" : "Confirmar Matrícula" }} <i class="pi pi-check"></i>
