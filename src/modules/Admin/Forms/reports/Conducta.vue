@@ -1,16 +1,16 @@
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, onMounted, watch } from "vue";
+import Swal from "sweetalert2";
 import { reporteService } from "@/services/reporteService";
 import { asignacionService } from "@/services/asignacionService";
-import { dato, fechaLegible, fila, hoy, imprimirReporte, seccion, texto } from "@/components/reportes/documentoReporte";
+import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 
-// Portal director > Reportes > Reporte de Conducta (formulario de Josmy,
-// 21/10/2026). Total de Estudiantes (matrículas aprobadas del año del período)
-// sale de la base y aquí solo se muestra; la clasificación de reportes, los
-// incidentes y las medidas no existen en el sistema y se llenan a mano. No se
-// guarda en la base de datos. La fecha es la del día en que se genera. El PDF con
-// dompdf queda pendiente del diseño de Josmy: mientras tanto "Generar Reporte"
-// abre el documento para imprimirlo o guardarlo como PDF.
+// Portal director > Reportes > Reporte de Conducta (formulario y diseño de PDF
+// de Josmy, 21/10/2026). El backend genera el PDF con dompdf. Total de Estudiantes
+// (matrículas aprobadas del año del período) sale de la base y aquí solo se
+// muestra; la clasificación de reportes, los incidentes y las medidas no existen
+// en el sistema y se llenan a mano. No se guarda en la base de datos. La fecha es
+// solo de lectura: el PDF lleva la del día en que se genera.
 const emit = defineEmits(["cerrar"]);
 const fechaHoy = fechaLegible(hoy());
 const MEDIDAS = ["Amonestación Verbal", "Amonestación Escrita", "Citación a Padres", "Suspensión"];
@@ -31,10 +31,10 @@ const form = ref({
 const periodos = ref([]);
 const indicadores = ref(null);
 const cargando = ref(false);
+const generando = ref(false);
 const aviso = ref("");
 
 const mensaje = (e, porDefecto) => e.response?.data?.message ?? porDefecto;
-const periodoActual = computed(() => periodos.value.find((p) => String(p.id) === String(form.value.periodo_id)));
 
 onMounted(async () => {
   try {
@@ -66,22 +66,40 @@ watch(
   },
 );
 
-const generar = () => {
+// Mensaje de error de una respuesta pedida como blob (422, 404...)
+const errorDeBlob = async (e) => {
+  try {
+    const cuerpo = JSON.parse(await e.response.data.text());
+    return Object.values(cuerpo.errors ?? {})[0]?.[0] ?? cuerpo.message;
+  } catch {
+    return null;
+  }
+};
+
+const generar = async () => {
   const f = form.value;
-  imprimirReporte({
-    titulo: "Reporte de Conducta",
-    subtitulo: "Reporte de Conducta y Convivencia Escolar",
-    cuerpo: [
-      seccion("Identificación", fila(dato("Período", periodoActual.value?.nombre), dato("Fecha", fechaHoy), dato("Director responsable", f.director))),
-      seccion("Resumen General", fila(dato("Total de Estudiantes", indicadores.value?.total_estudiantes))),
-      seccion("Clasificación de Reportes", fila(dato("Reportes Leves", f.leves), dato("Reportes Moderados", f.moderados), dato("Reportes Graves", f.graves))),
-      seccion("Incidentes Registrados", texto(f.incidentes)),
-      seccion("Medidas Disciplinarias Aplicadas", fila(dato("Medidas", f.medidas.join(", "))) + texto(f.detalle_medidas)),
-      seccion("Recomendaciones", texto(f.recomendaciones)),
-      seccion("Observaciones Generales", texto(f.observaciones)),
-    ].join(""),
-    firma: [f.director, "Director responsable"],
-  });
+  generando.value = true;
+  try {
+    const pdf = await reporteService.conductaDirectorPdf({
+      periodo_escolar_id: f.periodo_id,
+      director: f.director,
+      leves: f.leves === "" ? null : f.leves,
+      moderados: f.moderados === "" ? null : f.moderados,
+      graves: f.graves === "" ? null : f.graves,
+      incidentes: f.incidentes,
+      medidas: f.medidas,
+      detalle_medidas: f.detalle_medidas,
+      recomendaciones: f.recomendaciones,
+      observaciones: f.observaciones,
+    });
+    const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    Swal.fire({ icon: "error", title: (await errorDeBlob(e)) ?? "No se pudo generar el reporte." });
+  } finally {
+    generando.value = false;
+  }
 };
 
 const entrada =
@@ -164,10 +182,10 @@ const etiqueta = "block text-xs text-gray-500 mb-1";
           <input v-model="form.medidas" type="checkbox" :value="m" class="h-4 w-4 rounded border-gray-300" />{{ m }}
         </label>
       </div>
-      <textarea v-model="form.detalle_medidas" :class="[area, 'mt-4']" maxlength="3000" placeholder="Detalle de medidas disciplinarias aplicadas..."></textarea>
+      <textarea v-model="form.detalle_medidas" :class="[area, 'mt-4']" maxlength="3000" placeholder="Otras medidas o detalle (una por línea)..."></textarea>
 
       <h3 :class="subtitulo"><i class="pi pi-lightbulb text-amber-500"></i>Recomendaciones</h3>
-      <textarea v-model="form.recomendaciones" :class="area" maxlength="3000" placeholder="Acciones preventivas y recomendaciones para mejorar la convivencia escolar..."></textarea>
+      <textarea v-model="form.recomendaciones" :class="area" maxlength="3000" placeholder="Acciones preventivas y recomendaciones (una por línea)..."></textarea>
 
       <h3 :class="subtitulo"><i class="pi pi-comment text-gray-500"></i>Observaciones Generales</h3>
       <textarea v-model="form.observaciones" :class="area" maxlength="3000" placeholder="Observaciones adicionales..."></textarea>
@@ -176,8 +194,8 @@ const etiqueta = "block text-xs text-gray-500 mb-1";
         <button type="button" class="px-5 py-2 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200" @click="emit('cerrar')">
           Cancelar
         </button>
-        <button type="submit" :disabled="!indicadores" class="px-5 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50">
-          <i class="pi pi-file-pdf mr-2"></i>Generar Reporte
+        <button type="submit" :disabled="!indicadores || generando" class="px-5 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50">
+          <i :class="['pi mr-2', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Reporte
         </button>
       </div>
     </form>

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
+import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 
 // Portal docente > Reportes > Reporte de Rendimiento (formulario de Josmy, 20/10/2026).
 // Calificaciones de los alumnos de una sección en una asignatura del docente y un
@@ -143,6 +144,8 @@ const generar = async () => {
   }
 };
 
+// Solo lectura: el PDF lleva la fecha del día en que se genera (la pone el backend)
+const fechaHoy = fechaLegible(hoy());
 const etiqueta = "block text-sm text-gray-600 mb-1";
 const entrada =
   "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400";
@@ -200,6 +203,10 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <label class="block">
         <span :class="etiqueta">Profesor responsable</span>
         <input v-model.trim="form.profesor" :class="entrada" placeholder="Ingrese el nombre del profesor" required />
+      </label>
+      <label class="block">
+        <span :class="etiqueta">Fecha</span>
+        <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
       </label>
     </div>
 
