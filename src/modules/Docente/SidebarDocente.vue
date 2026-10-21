@@ -102,7 +102,7 @@ const handleNavClick = () => {
           <div class="bg-white drop-shadow p-2 rounded-full">
             <i class="pi pi-chart-bar text-blue-500"></i>
           </div>
-          Libreta
+          Reportes
         </router-link>
 
         <router-link to="/docente/grados-secciones" class="menu-item" @click="handleNavClick">
