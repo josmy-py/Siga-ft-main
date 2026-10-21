@@ -4,7 +4,6 @@ import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import RegistroCliente from "./RegistroCliente.vue";
 import { estudianteService } from "../../services/estudianteService";
-import ComprobanteMatricula from "../../components/ComprobanteMatricula.vue";
 import { mensajeError } from "../../services/api";
 import { useAuthStore } from "../../stores/authStore";
 
@@ -17,8 +16,6 @@ const cargando = ref(true);
 const error = ref("");
 const abrirRegistro = ref(false);
 const editado = ref(null);
-// M11: comprobante de la última matrícula
-const comprobanteId = ref(null);
 
 const etiquetaEstado = {
   inscrito: "Registrado, sin matrícula aprobada",
@@ -171,14 +168,7 @@ const familia = (hijo) => router.push({ name: "registro-padres", query: { estudi
                   <i class="pi pi-trash"></i>
                   Eliminar
                 </button>
-                <button
-                  v-if="hijo.ultima_matricula"
-                  @click="comprobanteId = hijo.ultima_matricula.id"
-                  class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
-                >
-                  <i class="pi pi-file"></i>
-                  Comprobante
-                </button>
+            
                 <button
                   v-if="hijo.estado === 'inscrito'"
                   @click="matricular(hijo)"
@@ -193,7 +183,6 @@ const familia = (hijo) => router.push({ name: "registro-padres", query: { estudi
             <div v-if="!cargando && hijos.length === 0" class="p-10 text-center text-gray-500">
               No hay estudiantes registrados.
             </div>
-            <ComprobanteMatricula v-if="comprobanteId" :matricula-id="comprobanteId" @cerrar="comprobanteId = null" />
           </div>
         </div>
       </div>

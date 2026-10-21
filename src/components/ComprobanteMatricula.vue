@@ -11,8 +11,6 @@ const emit = defineEmits(["cerrar"]);
 const comprobante = ref(null);
 const error = ref("");
 
-const imprimir = () => window.print();
-
 const estados = { pendiente: "Pendiente", aprobado: "Aprobada", rechazado: "Rechazada" };
 
 onMounted(async () => {
@@ -53,11 +51,7 @@ onMounted(async () => {
           <div class="flex justify-between"><dt class="text-gray-500">Estado</dt><dd class="font-semibold">{{ estados[comprobante.estado] ?? comprobante.estado }}</dd></div>
         </dl>
       </div>
-
       <div class="mt-6 flex justify-end gap-2 print:hidden">
-        <button v-if="comprobante" class="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700" @click="imprimir">
-          <i class="pi pi-print mr-1"></i>Imprimir
-        </button>
         <button class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200" @click="emit('cerrar')">Cerrar</button>
       </div>
     </div>

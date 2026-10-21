@@ -204,9 +204,6 @@ const quitar = async (padre) => {
               <span>{{ m.anio_lectivo?.anio || "Sin año" }} · {{ m.seccion?.grado?.nombre || "—" }} {{ m.seccion?.nombre || "" }}</span>
               <span class="flex items-center gap-3">
                 <span class="font-semibold">{{ m.estado }}</span>
-                <button class="text-blue-600 hover:underline" @click="comprobanteId = m.id">
-                  <i class="pi pi-file mr-1"></i>Comprobante
-                </button>
               </span>
             </div>
             <p v-if="resultados[m.id]?.nota_final" class="mt-1 text-gray-600">
@@ -218,8 +215,6 @@ const quitar = async (padre) => {
           </div>
           <p v-if="!alumno.matriculas?.length" class="text-sm text-gray-500">Sin matrículas registradas.</p>
         </div>
-
-        <ComprobanteMatricula v-if="comprobanteId" :matricula-id="comprobanteId" @cerrar="comprobanteId = null" />
 
         <div class="flex justify-end">
           <button

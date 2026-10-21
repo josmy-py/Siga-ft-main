@@ -1,4 +1,3 @@
-```vue
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from "vue";
 import { useRoute } from "vue-router";
@@ -72,4 +71,3 @@ watch(
     ></div>
   </div>
 </template>
-```
