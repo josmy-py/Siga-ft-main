@@ -98,4 +98,10 @@ export const reporteService = {
     const { data } = await api.get('/reportes/conducta/indicadores', { params: { periodo_escolar_id: periodoId } })
     return data
   },
+
+  // Reporte Institucional (director): indicadores del nivel en el período
+  async institucionalIndicadores(nivel, periodoId) {
+    const { data } = await api.get('/reportes/institucional/indicadores', { params: { nivel, periodo_escolar_id: periodoId } })
+    return data
+  },
 }
