@@ -14,4 +14,17 @@ export const constanciaService = {
     const { data } = await api.post('/constancias/egresado/pdf', datos, { responseType: 'blob' })
     return data
   },
+
+  // { nombre, nie, anios: ['2026', '2025'] } años lectivos de sus matrículas aprobadas
+  // (404 si no está registrado; 409 si no tiene matrículas aprobadas)
+  async conducta(nie) {
+    const { data } = await api.get('/constancias/conducta', { params: { nie } })
+    return data
+  },
+
+  // Constancia de Buena Conducta: PDF (blob)
+  async conductaPdf(datos) {
+    const { data } = await api.post('/constancias/conducta/pdf', datos, { responseType: 'blob' })
+    return data
+  },
 }

@@ -1,21 +1,22 @@
 <script setup>
 import { ref } from "vue";
 import TarjetasReportes from "@/components/reportes/TarjetasReportes.vue";
+import Conducta from "@/modules/Admin/Forms/constancias/Conducta.vue";
 import Egresado from "@/modules/Admin/Forms/constancias/Egresado.vue";
 
-// Portal director > Constancias, misma vista de tarjetas que Reportes. Por ahora
-// solo la de Egresado tiene formulario; la de Conducta se hará después.
+// Portal director > Constancias, misma vista de tarjetas que Reportes. Cada
+// tarjeta abre su formulario; el PDF se genera con dompdf en el backend.
 const formularioActivo = ref(null);
 
 const constancias = [
   {
     id: "conducta",
     titulo: "Constancia de Conducta",
-    descripcion: "Constancia de la conducta del estudiante en la institución",
+    descripcion: "Constancia de buena conducta del estudiante en la institución",
     icono: "pi-id-card",
     fondo: "bg-blue-100",
     color: "text-blue-600",
-    disponible: false,
+    disponible: true,
   },
   {
     id: "egresado",
@@ -43,7 +44,8 @@ const constancias = [
       />
 
       <div v-else class="p-4 lg:p-6">
-        <Egresado v-if="formularioActivo === 'egresado'" @cerrar="formularioActivo = null" />
+        <Conducta v-if="formularioActivo === 'conducta'" @cerrar="formularioActivo = null" />
+        <Egresado v-else-if="formularioActivo === 'egresado'" @cerrar="formularioActivo = null" />
       </div>
     </main>
   </div>
