@@ -17,6 +17,9 @@ import { erroresCampos, mensajeError } from "../../services/api";
 // Pestaña Encargado: si ninguno de los padres registrados es el responsable (padres.user_id
 // de la cuenta), se registra el encargado en la tabla encargados con el user_id de la cuenta.
 // Si ya hay responsable solo se muestran sus datos.
+// Antiguo ingreso (Reingreso): el estudiante se busca solo por su NIE y su ficha se llena sola;
+// solo se eligen grado y turno (la especialidad depende del grado). Si es de otra cuenta,
+// al aprobarse la matrícula pasa a esta cuenta, que queda como su responsable.
 const route = useRoute();
 const router = useRouter();
 
@@ -42,6 +45,10 @@ const errorOpciones = ref("");
 const fotoUrl = ref(null);
 const discapacidadElegida = ref("");
 const pestana = ref("matricula");
+const nieBuscado = ref("");
+const encontrado = ref(null);
+const buscando = ref(false);
+const errorBusqueda = ref("");
 const encargado = reactive({ nombre: "", parentesco: "", dui: "", telefono: "", direccion: "" });
 const erroresEncargado = ref({});
 const guardandoEncargado = ref(false);
@@ -60,15 +67,19 @@ const form = reactive({
   documento: null,
 });
 
+// Nuevo ingreso: solo estudiantes que aún no pertenecen a la institución (sin matrícula aprobada);
+// los ya registrados se matriculan por Antiguo ingreso con la búsqueda por NIE
+const estudiantesNuevos = computed(() => estudiantes.value.filter((e) => !e.registrado));
+const hayRegistrados = computed(() => estudiantes.value.some((e) => e.registrado));
 const etiquetaTipo = computed(() => TIPOS.find((t) => t.valor === tipo.value)?.titulo ?? "");
 const esNuevo = computed(() => tipo.value === "Nuevo ingreso");
 const responsable = computed(() => opciones.value?.responsable ?? null);
 const faltaEncargado = computed(() => !!responsable.value?.falta);
 const grado = computed(() => opciones.value?.grados?.find((g) => g.id === form.grado_id) ?? null);
 const tipoNoCorresponde = computed(() => opciones.value?.ingreso && opciones.value.ingreso !== tipo.value);
-// NIE: el encargado lo ingresa en Reingreso o si viene de otra institución; en Nuevo ingreso
-// sin traslado lo registra la dirección al aprobar
-const nieEditable = computed(() => !esNuevo.value || form.es_trasladado);
+// NIE: en Reingreso es el de la búsqueda; en Nuevo ingreso lo ingresa el encargado si viene de
+// otra institución y, sin traslado, lo registra la dirección al aprobar
+const nieEditable = computed(() => esNuevo.value && form.es_trasladado);
 // Nivel según el grado (Parvularia, Educación Básica); la especialidad solo aplica en Bachillerato
 const esBachillerato = computed(() => grado.value?.nivel === "Bachillerato");
 const especialidadFija = computed(() =>
@@ -103,7 +114,13 @@ onMounted(async () => {
     enfermedades.value = enf.enfermedades ?? [];
     discapacidades.value = dis.discapacidades ?? [];
     especialidades.value = esp.especialidades ?? [];
-    if (route.query.estudiante && lista.some((e) => String(e.id) === String(route.query.estudiante))) {
+    const elegido = route.query.estudiante && lista.find((e) => String(e.id) === String(route.query.estudiante));
+    // Un estudiante ya registrado siempre va por Antiguo ingreso
+    if (elegido?.registrado && elegido.nie && tipo.value !== "Reingreso") elegirTipo("Reingreso");
+    if (elegido && tipo.value === "Reingreso" && elegido.nie) {
+      nieBuscado.value = elegido.nie;
+      await buscarPorNie();
+    } else if (elegido) {
       form.estudiante_id = Number(route.query.estudiante);
     }
   } catch (e) {
@@ -154,7 +171,42 @@ for (const campo of ["nie", "grado_id", "turno", "especialidad_id", "enfermedad_
 // Sin traslado la documentación deja de ser obligatoria
 watch(() => form.es_trasladado, () => delete errores.value.documento);
 
+// Reingreso: busca por NIE; la ficha (nombre, fecha, sexo, dirección y lugar) se llena sola
+const buscarPorNie = async () => {
+  const nie = nieBuscado.value.trim();
+  errorBusqueda.value = "";
+  if (!/^[0-9]{1,10}$/.test(nie)) {
+    errorBusqueda.value = "Escriba el NIE del estudiante (solo números, hasta 10 dígitos).";
+    return;
+  }
+  buscando.value = true;
+  try {
+    encontrado.value = await matriculaService.buscarNie(nie);
+    form.estudiante_id = encontrado.value?.id ?? "";
+    if (!encontrado.value) {
+      errorBusqueda.value = "No hay un estudiante registrado en la institución con ese NIE. Si nunca ha estudiado aquí, matricúlelo como Nuevo ingreso.";
+    }
+  } catch (e) {
+    errorBusqueda.value = mensajeError(e, "No se pudo buscar al estudiante.");
+  } finally {
+    buscando.value = false;
+  }
+};
+
+// Ya registrado: pasa a Antiguo ingreso y lo busca por su NIE
+const cambiarAReingreso = async () => {
+  const nie = estudiantes.value.find((e) => e.id === form.estudiante_id)?.nie ?? opciones.value?.nie ?? "";
+  elegirTipo("Reingreso");
+  nieBuscado.value = nie;
+  if (nie) await buscarPorNie();
+};
+
 const elegirTipo = (valor) => {
+  if (valor !== tipo.value) {
+    encontrado.value = null;
+    nieBuscado.value = "";
+    form.estudiante_id = "";
+  }
   tipo.value = valor;
   router.replace({ query: { ...route.query, tipo: valor } });
 };
@@ -191,7 +243,7 @@ const quitarDiscapacidad = (id) => {
 // Mismas reglas que la API (MatriculaController::store), más grado y turno con cupo
 const validar = () => {
   const e = {};
-  if (!form.estudiante_id) e.estudiante_id = "El estudiante es obligatorio.";
+  if (!form.estudiante_id) e.estudiante_id = esNuevo.value ? "El estudiante es obligatorio." : "Busque al estudiante por su NIE.";
   if (nieEditable.value) {
     if (!form.nie.trim()) e.nie = "El NIE del estudiante es obligatorio.";
     else if (!/^[0-9]{1,10}$/.test(form.nie.trim())) e.nie = "El NIE debe tener solo números (hasta 10 dígitos).";
@@ -223,7 +275,7 @@ const enviar = async () => {
     const { message } = await matriculaService.solicitar({
       ingreso: tipo.value,
       estudiante_id: form.estudiante_id,
-      nie: nieEditable.value ? form.nie.trim() : null,
+      nie: !esNuevo.value ? encontrado.value?.nie ?? null : nieEditable.value ? form.nie.trim() : null,
       especialidad_id: esBachillerato.value ? form.especialidad_id : opciones.value.especialidad_id ?? "",
       grado_id: form.grado_id,
       turno: form.turno,
@@ -374,19 +426,71 @@ const claseCampo = (campo) =>
           <!-- Datos académicos -->
           <div class="lg:col-span-2 space-y-5">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="md:col-span-2">
+              <!-- Antiguo ingreso: búsqueda solo por NIE -->
+              <div v-if="!esNuevo" class="md:col-span-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1">NIE del estudiante *</label>
+                <div class="flex gap-2">
+                  <input
+                    v-model="nieBuscado"
+                    inputmode="numeric"
+                    maxlength="10"
+                    placeholder="Solo números"
+                    :class="claseCampo('estudiante_id')"
+                    @keydown.enter.prevent="buscarPorNie"
+                  />
+                  <button type="button" :disabled="buscando" class="shrink-0 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50" @click="buscarPorNie">
+                    <i class="pi pi-search mr-1"></i>{{ buscando ? "Buscando…" : "Buscar" }}
+                  </button>
+                </div>
+                <p v-if="errorBusqueda" class="text-red-600 text-xs mt-1">
+                  {{ errorBusqueda }}
+                  <button type="button" class="underline ml-1" @click="elegirTipo('Nuevo ingreso')">Ir a Nuevo ingreso</button>
+                </p>
+                <p v-else-if="errores.estudiante_id" class="text-red-600 text-xs mt-1">{{ errores.estudiante_id }}</p>
+              </div>
+              <template v-if="!esNuevo && encontrado">
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Nombre completo del estudiante</label>
+                  <input :value="encontrado.nombre" disabled class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-700" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
+                  <input :value="encontrado.fecha_nacimiento" type="date" disabled class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-700" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
+                  <input :value="encontrado.genero" disabled class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-700" />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Lugar (distrito, municipio, departamento)</label>
+                  <input :value="[encontrado.distrito, encontrado.municipio, encontrado.departamento].filter(Boolean).join(', ')" disabled class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-700" />
+                </div>
+                <div class="md:col-span-3">
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                  <input :value="encontrado.direccion" disabled class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-700" />
+                </div>
+                <p v-if="!encontrado.propio" class="md:col-span-3 text-sm rounded-xl p-3 bg-blue-50 text-blue-800">
+                  El estudiante estaba registrado en otra cuenta. Cuando la dirección apruebe esta matrícula, pasará a su cuenta y usted será su responsable para este año lectivo.
+                </p>
+              </template>
+
+              <div v-if="esNuevo" class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Nombre completo del estudiante *</label>
                 <select v-model="form.estudiante_id" :class="claseCampo('estudiante_id')">
                   <option value="">Seleccione un estudiante registrado…</option>
-                  <option v-for="e in estudiantes" :key="e.id" :value="e.id">{{ e.nombre }}</option>
+                  <option v-for="e in estudiantesNuevos" :key="e.id" :value="e.id">{{ e.nombre }}</option>
                 </select>
                 <p v-if="errores.estudiante_id" class="text-red-600 text-xs mt-1">{{ errores.estudiante_id }}</p>
-                <p v-if="!estudiantes.length" class="text-xs text-gray-500 mt-1">
+                <p v-if="hayRegistrados" class="text-xs text-gray-500 mt-1">
+                  Los estudiantes que ya pertenecen a la institución no aparecen aquí: se matriculan por
+                  <button type="button" class="text-blue-600 underline" @click="elegirTipo('Reingreso')">Antiguo ingreso</button>, buscando su NIE.
+                </p>
+                <p v-if="!estudiantesNuevos.length" class="text-xs text-gray-500 mt-1">
                   Primero registre al estudiante en
                   <router-link class="text-blue-600 underline" :to="{ name: 'registro-cliente' }">Registro de Estudiante</router-link>.
                 </p>
               </div>
-              <div>
+              <div v-if="esNuevo">
                 <label class="block text-sm font-medium text-gray-700 mb-1">NIE *</label>
                 <input
                   v-if="nieEditable"
@@ -408,7 +512,8 @@ const claseCampo = (campo) =>
               <template v-if="!opciones.permitido">{{ opciones.mensaje }}</template>
               <template v-else>
                 {{ opciones.mensaje }} Para este estudiante corresponde <b>{{ opciones.ingreso }}</b>.
-                <button type="button" class="underline ml-1" @click="elegirTipo(opciones.ingreso)">Cambiar a {{ opciones.ingreso }}</button>
+                <button v-if="opciones.ingreso === 'Reingreso'" type="button" class="underline ml-1" @click="cambiarAReingreso">Ir a Antiguo ingreso</button>
+                <button v-else type="button" class="underline ml-1" @click="elegirTipo(opciones.ingreso)">Cambiar a {{ opciones.ingreso }}</button>
               </template>
             </div>
 

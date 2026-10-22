@@ -23,6 +23,18 @@ export const matriculaService = {
     return data
   },
 
+  // Reingreso: busca al estudiante solo por NIE (también de otra cuenta si ya tuvo matrícula aprobada).
+  // { id, nombre, nie, fecha_nacimiento, genero, direccion, distrito, municipio, departamento, propio } o null
+  async buscarNie(nie) {
+    try {
+      const { data } = await api.post('/matriculas/buscar-nie', { nie })
+      return data.estudiante
+    } catch (error) {
+      if (error.response?.status === 404) return null
+      throw error
+    }
+  },
+
   // datos: { ingreso, estudiante_id, nie, especialidad_id, enfermedad_id, discapacidades[], es_trasladado, foto, documento }
   async solicitar(datos) {
     const { data } = await api.post('/matriculas', aFormData(datos))
