@@ -22,8 +22,9 @@ const logout = () => authStore.logout();
 </script>
 
 <template>
+  <!-- Cambiamos z-30 por z-20 aquí -->
   <header
-    class="sticky top-0 z-30 h-16 flex items-center justify-between px-4 md:px-6 bg-white border-b border-slate-200 shadow-sm shrink-0"
+    class="sticky top-0 z-20 h-16 flex items-center justify-between px-4 md:px-6 bg-white border-b border-slate-200 shadow-sm shrink-0"
   >
     <div class="flex items-center gap-3">
       <button
