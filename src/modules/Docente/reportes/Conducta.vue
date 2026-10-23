@@ -1,11 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import Swal from "sweetalert2";
-import { asignacionService } from "@/services/asignacionService";
 import { conductaService } from "@/services/conductaService";
 import { reporteService } from "@/services/reporteService";
 import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 import { periodosDelGrado } from "@/services/nivelAcademico";
+import { cargaDelAnioActivo } from "./cargaAnioActivo";
 
 // Portal docente > Reportes > Conducta (formulario y diseño de PDF de Josmy,
 // 21/10/2026). Grado, sección y período salen de la carga académica del docente;
@@ -13,12 +13,15 @@ import { periodosDelGrado } from "@/services/nivelAcademico";
 // docente que inició sesión. El tipo de conducta son valores fijos de este
 // formulario (pedido de Josmy) y se imprime en el PDF. "Generar Reporte" abre el
 // PDF que arma el backend con dompdf. No se guarda en la base de datos.
+// Pedido de Josmy (23/10/2026): solo con el año lectivo activo y sin
+// "Compromisos de mejora".
 const emit = defineEmits(["cerrar"]);
 const MAX_ACCIONES = 500;
 const TIPOS_CONDUCTA = ["Excelente", "Muy buena", "Buena", "Regular", "Mala", "Muy mala", "Necesita mejorar"];
 
 const carga = ref([]); // [{ id, nombre, grado_id, grado }]
 const periodos = ref([]);
+const anioLectivo = ref(""); // año lectivo activo, de solo lectura
 const nombreProfesor = ref("");
 const estudiantes = ref([]); // [{ matricula_id, estudiante, conducta }]
 const cargando = ref(false);
@@ -34,7 +37,6 @@ const inicial = () => ({
   tipo: "",
   descripcion: "",
   acciones: "",
-  compromisos: "",
 });
 const form = ref(inicial());
 
@@ -55,7 +57,8 @@ const estudianteActual = computed(() => estudiantes.value.find((e) => String(e.m
 
 onMounted(async () => {
   try {
-    const datos = await asignacionService.miCarga();
+    const datos = await cargaDelAnioActivo();
+    anioLectivo.value = datos.anio_lectivo?.anio ?? "";
     nombreProfesor.value = datos.profesor?.nombre ?? "";
     form.value.profesor = nombreProfesor.value;
     carga.value = (datos.secciones ?? []).map(({ seccion: s }) => ({
@@ -65,7 +68,8 @@ onMounted(async () => {
       grado: s.grado?.nombre ?? "",
     }));
     if (datos.anio_lectivo?.id) periodos.value = await reporteService.periodos(datos.anio_lectivo.id);
-    if (!carga.value.length) aviso.value = "No tiene carga académica en el año lectivo; consulte con el director.";
+    if (!datos.anio_lectivo) aviso.value = "No hay un año lectivo activo; los reportes se generan solo con el año activo.";
+    else if (!carga.value.length) aviso.value = "No tiene carga académica en el año lectivo activo; consulte con el director.";
   } catch (e) {
     aviso.value = e.response?.data?.message ?? "No se pudo cargar su carga académica.";
   }
@@ -133,7 +137,6 @@ const generar = async () => {
       conducta: f.tipo,
       descripcion_hechos: f.descripcion,
       acciones_tomadas: f.acciones,
-      compromiso_mejora: f.compromisos,
     });
     const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
     window.open(url, "_blank");
@@ -188,6 +191,10 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
         <span :class="etiqueta">Fecha</span>
         <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
       </label>
+      <label class="block">
+        <span :class="etiqueta">Año lectivo</span>
+        <input :value="anioLectivo" :class="[entrada, 'bg-gray-50']" readonly title="Año lectivo activo" />
+      </label>
     </div>
 
     <h3 :class="subtitulo">
@@ -224,11 +231,6 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <span>{{ form.acciones.length }}/{{ MAX_ACCIONES }}</span>
     </div>
 
-    <label class="block mt-5">
-      <span class="block text-sm font-semibold text-gray-800 mb-2">Compromisos de Mejora</span>
-      <textarea v-model="form.compromisos" :class="[entrada, 'h-20 resize-y']" maxlength="1000" placeholder="Escriba el compromiso del estudiante..." required></textarea>
-    </label>
-
     <div class="mt-8 flex flex-wrap justify-end gap-3">
       <button type="button" :class="[boton, 'bg-gray-100 text-gray-700 hover:bg-gray-200']" @click="limpiar">
         <i class="pi pi-refresh"></i>Limpiar
@@ -236,7 +238,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <button type="button" :class="[boton, 'bg-gray-100 text-gray-700 hover:bg-gray-200']" @click="emit('cerrar')">
         <i class="pi pi-times"></i>Cancelar
       </button>
-      <button type="submit" :disabled="!estudianteActual || generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
+      <button type="submit" :disabled="!anioLectivo || !estudianteActual || generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
         <i :class="['pi', generando ? 'pi-spin pi-spinner' : 'pi-check']"></i>Generar Reporte
       </button>
     </div>

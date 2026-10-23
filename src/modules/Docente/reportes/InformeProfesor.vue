@@ -1,10 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import Swal from "sweetalert2";
-import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
 import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 import { periodosDelGrado } from "@/services/nivelAcademico";
+import { cargaDelAnioActivo } from "./cargaAnioActivo";
 
 // Portal docente > Reportes > Informe Profesor (formulario de Josmy, 20/10/2026).
 // Grado, sección y período salen de la carga académica del docente que inició
@@ -18,6 +18,7 @@ const fechaHoy = fechaLegible(hoy());
 
 const carga = ref([]); // [{ id, nombre, grado_id, grado }]
 const periodos = ref([]);
+const anioLectivo = ref(""); // año lectivo activo, de solo lectura
 const nombreProfesor = ref("");
 const aviso = ref("");
 const generando = ref(false);
@@ -55,7 +56,8 @@ watch(
 
 onMounted(async () => {
   try {
-    const datos = await asignacionService.miCarga();
+    const datos = await cargaDelAnioActivo();
+    anioLectivo.value = datos.anio_lectivo?.anio ?? "";
     nombreProfesor.value = datos.profesor?.nombre ?? "";
     form.value.profesor = nombreProfesor.value;
     carga.value = (datos.secciones ?? []).map(({ seccion: s }) => ({
@@ -65,7 +67,8 @@ onMounted(async () => {
       grado: s.grado?.nombre ?? "",
     }));
     if (datos.anio_lectivo?.id) periodos.value = await reporteService.periodos(datos.anio_lectivo.id);
-    if (!carga.value.length) aviso.value = "No tiene carga académica en el año lectivo; consulte con el director.";
+    if (!datos.anio_lectivo) aviso.value = "No hay un año lectivo activo; los reportes se generan solo con el año activo.";
+    else if (!carga.value.length) aviso.value = "No tiene carga académica en el año lectivo activo; consulte con el director.";
   } catch (e) {
     aviso.value = e.response?.data?.message ?? "No se pudo cargar su carga académica.";
   }
@@ -124,6 +127,10 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
         <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
       </label>
       <label class="block">
+        <span :class="etiqueta">Año lectivo</span>
+        <input :value="anioLectivo" :class="[entrada, 'bg-gray-50']" readonly title="Año lectivo activo" />
+      </label>
+      <label class="block">
         <span :class="etiqueta">Grado</span>
         <select v-model="form.grado_id" :class="entrada" required>
           <option value="" disabled>Seleccione un grado</option>
@@ -172,7 +179,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
       <button type="button" :class="[boton, 'bg-gray-100 text-gray-700 hover:bg-gray-200']" @click="emit('cerrar')">
         <i class="pi pi-times"></i>Cancelar
       </button>
-      <button type="submit" :disabled="generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
+      <button type="submit" :disabled="!anioLectivo || generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
         <i :class="['pi', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Informe
       </button>
     </div>

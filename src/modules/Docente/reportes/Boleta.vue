@@ -1,10 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import Swal from "sweetalert2";
-import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
 import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
 import { periodosDelGrado } from "@/services/nivelAcademico";
+import { cargaDelAnioActivo } from "./cargaAnioActivo";
 
 // Portal docente > Reportes > Boletas de Calificaciones: libreta de notas de un
 // estudiante (formulario de Josmy, 20/10/2026). Las asignaturas y calificaciones
@@ -13,6 +13,9 @@ import { periodosDelGrado } from "@/services/nivelAcademico";
 // registrada se precarga y es editable. "Generar Reporte" abre el PDF que arma
 // el backend con dompdf (diseño de Josmy, 21/10/2026) con las mismas notas. No
 // se guarda en la base de datos.
+// Pedido de Josmy (23/10/2026): solo con el año lectivo activo, una libreta
+// definitiva por período (solo cuando el período está cerrado) y sin el campo
+// "Descripción" de la conducta.
 const emit = defineEmits(["cerrar"]);
 // El PDF lleva la fecha del día en que se genera (la pone el backend)
 const fechaHoy = fechaLegible(hoy());
@@ -20,6 +23,7 @@ const MAX_OBSERVACIONES = 500;
 
 const carga = ref([]); // [{ id, nombre, grado_id, grado }]
 const periodos = ref([]);
+const anioLectivo = ref(""); // año lectivo activo, de solo lectura
 const notas = ref(null);
 const conductas = ref({}); // matricula_id -> { descripcion, valoracion }
 const cargando = ref(false);
@@ -32,7 +36,6 @@ const inicial = () => ({
   periodo_id: "",
   matricula_id: "",
   conducta_general: "",
-  conducta_descripcion: "",
   observaciones: "",
 });
 const form = ref(inicial());
@@ -50,6 +53,9 @@ const periodosDelNivel = computed(() =>
 watch(periodosDelNivel, (lista) => {
   if (form.value.periodo_id && !lista.some((p) => String(p.id) === String(form.value.periodo_id))) form.value.periodo_id = "";
 });
+// La libreta solo se genera con el período cerrado
+const periodoActual = computed(() => periodosDelNivel.value.find((p) => String(p.id) === String(form.value.periodo_id)));
+const periodoCerrado = computed(() => periodoActual.value?.estado === "cerrado");
 const profesorResponsable = computed(() => notas.value?.seccion?.profesor?.nombre ?? "");
 const estudiantes = computed(() => notas.value?.estudiantes ?? []);
 const estudianteActual = computed(() => estudiantes.value.find((e) => String(e.matricula_id) === String(form.value.matricula_id)));
@@ -62,7 +68,8 @@ const calificaciones = computed(() =>
 
 onMounted(async () => {
   try {
-    const datos = await asignacionService.miCarga();
+    const datos = await cargaDelAnioActivo();
+    anioLectivo.value = datos.anio_lectivo?.anio ?? "";
     carga.value = (datos.secciones ?? []).map(({ seccion: s }) => ({
       id: s.id,
       nombre: s.nombre,
@@ -70,7 +77,8 @@ onMounted(async () => {
       grado: s.grado?.nombre ?? "",
     }));
     if (datos.anio_lectivo?.id) periodos.value = await reporteService.periodos(datos.anio_lectivo.id);
-    if (!carga.value.length) aviso.value = "No tiene carga académica en el año lectivo; consulte con el director.";
+    if (!datos.anio_lectivo) aviso.value = "No hay un año lectivo activo; los reportes se generan solo con el año activo.";
+    else if (!carga.value.length) aviso.value = "No tiene carga académica en el año lectivo activo; consulte con el director.";
   } catch (e) {
     aviso.value = e.response?.data?.message ?? "No se pudo cargar su carga académica.";
   }
@@ -116,7 +124,6 @@ watch(
   (matriculaId) => {
     const conducta = conductas.value[matriculaId];
     form.value.conducta_general = conducta?.valoracion ?? "";
-    form.value.conducta_descripcion = conducta?.descripcion ?? "";
   },
 );
 
@@ -144,7 +151,6 @@ const generar = async () => {
       periodo_escolar_id: f.periodo_id,
       matricula_id: f.matricula_id,
       conducta: f.conducta_general,
-      conducta_descripcion: f.conducta_descripcion,
       observaciones: f.observaciones,
     });
     const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
@@ -187,6 +193,10 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
           <input :value="fechaHoy" :class="[entrada, 'bg-gray-50']" readonly title="El reporte lleva la fecha del día en que se genera" />
         </label>
         <label class="block">
+          <span :class="etiqueta">Año lectivo</span>
+          <input :value="anioLectivo" :class="[entrada, 'bg-gray-50']" readonly title="Año lectivo activo" />
+        </label>
+        <label class="block">
           <span :class="etiqueta">Grado</span>
           <span class="relative block">
             <i :class="[icono, 'pi-graduation-cap']"></i>
@@ -212,8 +222,13 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
             <i :class="[icono, 'pi-clock']"></i>
             <select v-model="form.periodo_id" :class="conIcono" required>
               <option value="" disabled>Selecciona un período</option>
-              <option v-for="p in periodosDelNivel" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+              <option v-for="p in periodosDelNivel" :key="p.id" :value="p.id">
+                {{ p.nombre }}{{ p.estado === "cerrado" ? "" : " (no cerrado)" }}
+              </option>
             </select>
+          </span>
+          <span v-if="periodoActual && !periodoCerrado" class="mt-1 block text-xs text-amber-700">
+            El período aún no está cerrado: la libreta se genera cuando el director lo cierre.
           </span>
         </label>
         <label class="block">
@@ -263,10 +278,6 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
         <span :class="etiqueta">Conducta general</span>
         <input v-model.trim="form.conducta_general" :class="entrada" maxlength="255" placeholder="Ej: Buena, Excelente, Regular..." />
       </label>
-      <label class="block mt-4">
-        <span :class="etiqueta">Descripción</span>
-        <textarea v-model="form.conducta_descripcion" maxlength="255" :class="[entrada, 'h-20 resize-y']" placeholder="Descripción de la conducta del estudiante..."></textarea>
-      </label>
 
       <label class="block mt-6">
         <span class="block text-sm font-semibold text-gray-800 mb-2">Observaciones del Docente</span>
@@ -289,7 +300,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
         <button type="button" :class="[boton, 'bg-gray-100 text-gray-700 hover:bg-gray-200']" @click="emit('cerrar')">
           <i class="pi pi-times"></i>Cancelar
         </button>
-        <button type="submit" :disabled="!estudianteActual || generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
+        <button type="submit" :disabled="!anioLectivo || !periodoCerrado || !estudianteActual || generando" :class="[boton, 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50']">
           <i :class="['pi', generando ? 'pi-spin pi-spinner' : 'pi-file-pdf']"></i>Generar Reporte
         </button>
       </div>

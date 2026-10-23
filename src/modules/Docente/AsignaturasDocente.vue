@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { asignacionService } from "../../services/asignacionService";
 
 // M4 (D-A5): materias que el director asignó al docente en sesión, para el año activo.
@@ -15,16 +15,50 @@ const paleta = [
   { color: "red", icono: "pi-palette" },
 ];
 
-const asignaturas = computed(() =>
+const todas = computed(() =>
   (carga.value?.asignaciones ?? []).map((a, i) => ({
     id: a.id,
     nombre: a.asignatura?.nombre ?? "Materia",
+    gradoId: a.seccion?.grado?.id ?? a.seccion?.grado_id ?? "",
+    seccionId: a.seccion?.id ?? "",
+    orden: a.seccion?.grado?.orden ?? 99,
     grado: a.seccion?.grado?.nombre ?? "",
     seccion: a.seccion?.nombre ?? "",
     turno: a.seccion?.turno ?? "",
     estudiantes: a.seccion?.matriculados ?? 0,
     ...paleta[i % paleta.length],
   }))
+);
+
+// Filtros (23/10/2026): grado y sección de las asignaturas del docente ("" = todos)
+const gradoId = ref("");
+const seccionId = ref("");
+
+const grados = computed(() => {
+  const unicos = new Map();
+  todas.value.forEach((a) => unicos.set(String(a.gradoId), { id: a.gradoId, nombre: a.grado, orden: a.orden }));
+  return [...unicos.values()].sort((x, y) => x.orden - y.orden || x.nombre.localeCompare(y.nombre));
+});
+
+const secciones = computed(() => {
+  const unicas = new Map();
+  todas.value
+    .filter((a) => !gradoId.value || String(a.gradoId) === String(gradoId.value))
+    .forEach((a) => unicas.set(String(a.seccionId), { id: a.seccionId, texto: gradoId.value ? `Sección ${a.seccion}` : `${a.grado} - Sección ${a.seccion}`, orden: a.orden, nombre: a.seccion }));
+  return [...unicas.values()].sort((x, y) => x.orden - y.orden || x.nombre.localeCompare(y.nombre));
+});
+
+// Al cambiar de grado, la sección elegida se quita si no es de ese grado
+watch(gradoId, () => {
+  if (seccionId.value && !secciones.value.some((s) => String(s.id) === String(seccionId.value))) seccionId.value = "";
+});
+
+const asignaturas = computed(() =>
+  todas.value.filter(
+    (a) =>
+      (!gradoId.value || String(a.gradoId) === String(gradoId.value)) &&
+      (!seccionId.value || String(a.seccionId) === String(seccionId.value)),
+  ),
 );
 
 const anio = computed(() => carga.value?.anio_lectivo?.anio ?? "");
@@ -83,6 +117,23 @@ const getColorClasses = (color) => {
           <p v-if="!cargando && !error" class="text-sm text-gray-500">
             Total: {{ asignaturas.length }} asignaturas
           </p>
+
+          <div v-if="todas.length" class="flex flex-wrap gap-3 mt-4">
+            <div class="flex flex-col">
+              <label class="text-sm font-medium text-gray-700 mb-1">Grado</label>
+              <select v-model="gradoId" class="px-4 py-2 border rounded-lg bg-white min-w-[14rem]">
+                <option value="">Todos los grados</option>
+                <option v-for="g in grados" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+              </select>
+            </div>
+            <div class="flex flex-col">
+              <label class="text-sm font-medium text-gray-700 mb-1">Sección</label>
+              <select v-model="seccionId" class="px-4 py-2 border rounded-lg bg-white min-w-[14rem]">
+                <option value="">Todas las secciones</option>
+                <option v-for="s in secciones" :key="s.id" :value="s.id">{{ s.texto }}</option>
+              </select>
+            </div>
+          </div>
         </section>
 
         <p v-if="cargando" class="text-sm text-gray-500">
@@ -99,7 +150,7 @@ const getColorClasses = (color) => {
           No hay un año lectivo activo.
         </div>
         <div
-          v-else-if="!asignaturas.length"
+          v-else-if="!todas.length"
           class="bg-white border border-gray-200 rounded-lg p-6 text-sm text-gray-500"
         >
           Aún no tienes materias asignadas en este año lectivo. La dirección registra la carga académica.

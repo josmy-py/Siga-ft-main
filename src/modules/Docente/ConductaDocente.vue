@@ -4,14 +4,17 @@ import { asignacionService } from "../../services/asignacionService";
 import { conductaService } from "../../services/conductaService";
 
 // Diagrama: SIGA Docente > Conducta > Registrar observaciones y Seguimiento conductual
+// Pedido de Josmy (23/10/2026): la observación es un texto fijo de cada valoración
+// (lo define el backend); el docente solo elige la valoración.
 const secciones = ref([]);
 const seccionId = ref("");
 const periodos = ref([]);
 const periodoId = ref("");
 const valoraciones = ref([]);
+const observaciones = ref({}); // valoración -> observación fija
 const editable = ref(false);
 
-// Filas: { matricula_id, estudiante, descripcion, valoracion, original }
+// Filas: { matricula_id, estudiante, valoracion, original }
 const filas = ref([]);
 
 const cargando = ref(true);
@@ -24,15 +27,18 @@ const mensaje = (e, porDefecto) => e.response?.data?.message ?? porDefecto;
 
 const etiqueta = (s) => `${s.grado?.nombre ?? ""} ${s.nombre ?? ""}`.trim();
 
+// Observación que se ve: la fija de la valoración elegida; si solo se consulta, la guardada
+const observacion = (f) =>
+  editable.value && f.valoracion ? observaciones.value[f.valoracion] ?? "" : f.original?.descripcion ?? "";
+
+// También cuenta como cambio un registro anterior cuyo texto no es el fijo de su valoración
 const cambiadas = computed(() =>
   filas.value.filter(
     (f) =>
-      (f.descripcion.trim() || f.valoracion) &&
-      (f.descripcion.trim() !== (f.original?.descripcion ?? "") || f.valoracion !== (f.original?.valoracion ?? ""))
+      f.valoracion &&
+      (f.valoracion !== (f.original?.valoracion ?? "") || (f.original?.descripcion ?? "") !== observaciones.value[f.valoracion])
   )
 );
-
-const incompletas = computed(() => cambiadas.value.filter((f) => !f.descripcion.trim() || !f.valoracion));
 
 const claseValoracion = (v) =>
   ({
@@ -52,6 +58,7 @@ const cargar = async (periodo = null) => {
     const data = await conductaService.listar(seccionId.value, periodo);
     periodos.value = data.periodos;
     valoraciones.value = data.valoraciones;
+    observaciones.value = data.observaciones ?? {};
     editable.value = data.editable;
     if (String(periodoId.value) !== String(data.periodo?.id ?? "")) {
       periodoId.value = data.periodo?.id ?? "";
@@ -59,7 +66,6 @@ const cargar = async (periodo = null) => {
     filas.value = data.estudiantes.map((e) => ({
       matricula_id: e.matricula_id,
       estudiante: e.estudiante,
-      descripcion: e.conducta?.descripcion ?? "",
       valoracion: e.conducta?.valoracion ?? "",
       original: e.conducta,
     }));
@@ -94,7 +100,7 @@ const cambiarPeriodo = () => {
 
 // Conducta.registrar() / actualizar(descripcion, valoracion)
 const guardar = async () => {
-  if (!cambiadas.value.length || incompletas.value.length) return;
+  if (!cambiadas.value.length) return;
   guardando.value = true;
   error.value = "";
   aviso.value = "";
@@ -105,7 +111,6 @@ const guardar = async () => {
       periodoId.value,
       cambiadas.value.map((f) => ({
         matricula_id: f.matricula_id,
-        descripcion: f.descripcion.trim(),
         valoracion: f.valoracion,
       }))
     );
@@ -156,7 +161,7 @@ const guardar = async () => {
             <h2 class="text-lg font-semibold text-gray-800">Observaciones del periodo</h2>
             <button
               v-if="editable && filas.length"
-              :disabled="guardando || !cambiadas.length || incompletas.length > 0"
+              :disabled="guardando || !cambiadas.length"
               class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50"
               @click="guardar"
             >
@@ -183,17 +188,9 @@ const guardar = async () => {
               <tbody>
                 <tr v-for="(f, i) in filas" :key="f.matricula_id" class="border-t border-gray-100">
                   <td class="px-6 py-4 font-semibold text-gray-800">{{ f.estudiante?.nombre }}</td>
-                  <td class="px-6 py-4">
-                    <input
-                      v-model="f.descripcion"
-                      maxlength="100"
-                      :disabled="!editable"
-                      placeholder="Ej. Respeta las normas de convivencia"
-                      class="w-full min-w-64 px-3 py-2 border border-gray-200 rounded-lg disabled:bg-gray-50"
-                    />
-                    <p v-if="errores[`conductas.${i}.descripcion`]" class="text-xs text-red-600 mt-1">
-                      {{ errores[`conductas.${i}.descripcion`][0] }}
-                    </p>
+                  <td class="px-6 py-4 min-w-64 text-sm text-gray-700">
+                    <span v-if="observacion(f)">{{ observacion(f) }}</span>
+                    <span v-else class="text-gray-400">Elija la valoración</span>
                   </td>
                   <td class="px-6 py-4 text-center">
                     <select
@@ -204,6 +201,9 @@ const guardar = async () => {
                       <option value="">Seleccione</option>
                       <option v-for="v in valoraciones" :key="v" :value="v">{{ v }}</option>
                     </select>
+                    <p v-if="errores[`conductas.${i}.valoracion`]" class="text-xs text-red-600 mt-1">
+                      {{ errores[`conductas.${i}.valoracion`][0] }}
+                    </p>
                     <span
                       v-else
                       class="px-3 py-1 rounded-full text-xs font-semibold"
@@ -215,8 +215,8 @@ const guardar = async () => {
                 </tr>
               </tbody>
             </table>
-            <p v-if="incompletas.length" class="px-6 py-3 text-sm text-amber-700">
-              Complete la observación y la valoración de cada estudiante que modificó.
+            <p v-if="editable" class="px-6 py-3 text-sm text-gray-500">
+              La observación es fija según la valoración elegida.
             </p>
           </div>
         </div>

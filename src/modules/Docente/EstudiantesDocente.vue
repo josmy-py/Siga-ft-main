@@ -12,8 +12,42 @@ const estudiantes = ref([]);
 const cargando = ref(true);
 const error = ref("");
 
-const etiqueta = (a) =>
-  `${a.asignatura?.nombre ?? "Materia"} · ${a.seccion?.grado?.nombre ?? ""} ${a.seccion?.nombre ?? ""}`.trim();
+// Filtros en cascada (23/10/2026): grado -> sección -> asignatura; la asignatura
+// elegida es la asignación cuyos estudiantes se listan
+const gradoId = ref("");
+const seccionId = ref("");
+const gradoDe = (a) => String(a.seccion?.grado?.id ?? a.seccion?.grado_id ?? "");
+const ordenar = (lista) => lista.sort((x, y) => x.orden - y.orden || x.nombre.localeCompare(y.nombre));
+
+const grados = computed(() => {
+  const unicos = new Map();
+  asignaciones.value.forEach((a) =>
+    unicos.set(gradoDe(a), { id: gradoDe(a), nombre: a.seccion?.grado?.nombre ?? "", orden: a.seccion?.grado?.orden ?? 99 }),
+  );
+  return ordenar([...unicos.values()]);
+});
+
+const secciones = computed(() => {
+  const unicas = new Map();
+  asignaciones.value
+    .filter((a) => gradoDe(a) === String(gradoId.value))
+    .forEach((a) => unicas.set(String(a.seccion?.id), { id: String(a.seccion?.id), nombre: a.seccion?.nombre ?? "", orden: 0 }));
+  return ordenar([...unicas.values()]);
+});
+
+const materias = computed(() =>
+  asignaciones.value
+    .filter((a) => String(a.seccion?.id) === String(seccionId.value))
+    .sort((x, y) => (x.asignatura?.nombre ?? "").localeCompare(y.asignatura?.nombre ?? "")),
+);
+
+// Al cambiar el grado o la sección se elige la primera opción disponible
+watch(gradoId, () => {
+  if (!secciones.value.some((s) => s.id === String(seccionId.value))) seccionId.value = secciones.value[0]?.id ?? "";
+});
+watch(seccionId, () => {
+  if (!materias.value.some((a) => String(a.id) === String(asignacionId.value))) asignacionId.value = materias.value[0]?.id ?? "";
+});
 
 const asignacionActual = computed(() =>
   asignaciones.value.find((a) => String(a.id) === String(asignacionId.value))
@@ -40,8 +74,14 @@ onMounted(async () => {
   try {
     const carga = await asignacionService.miCarga();
     asignaciones.value = carga.asignaciones ?? [];
+    // Con ?asignacion=ID (desde Notas) se preseleccionan su grado, sección y asignatura
     const pedida = asignaciones.value.find((a) => String(a.id) === String(route.query.asignacion));
-    asignacionId.value = (pedida ?? asignaciones.value[0])?.id ?? "";
+    const inicial = pedida ?? asignaciones.value.find((a) => gradoDe(a) === grados.value[0]?.id);
+    if (inicial) {
+      asignacionId.value = inicial.id;
+      seccionId.value = String(inicial.seccion?.id);
+      gradoId.value = gradoDe(inicial);
+    }
   } catch (e) {
     error.value = mensaje(e, "No se pudo cargar tu carga académica.");
   } finally {
@@ -67,10 +107,24 @@ const verEstudiante = (matricula) => {
 
       <div class="flex flex-wrap items-end gap-4 p-4 mt-8">
         <div class="flex flex-col">
-          <label class="text-sm font-medium text-gray-700 mb-1">Asignatura y sección</label>
-          <select v-model="asignacionId" class="px-4 py-2 border rounded-lg">
-            <option v-if="!asignaciones.length" value="">Sin asignaturas</option>
-            <option v-for="a in asignaciones" :key="a.id" :value="a.id">{{ etiqueta(a) }}</option>
+          <label class="text-sm font-medium text-gray-700 mb-1">Grado</label>
+          <select v-model="gradoId" class="px-4 py-2 border rounded-lg bg-white min-w-[12rem]">
+            <option v-if="!grados.length" value="">Sin grados</option>
+            <option v-for="g in grados" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+          </select>
+        </div>
+        <div class="flex flex-col">
+          <label class="text-sm font-medium text-gray-700 mb-1">Sección</label>
+          <select v-model="seccionId" class="px-4 py-2 border rounded-lg bg-white min-w-[8rem]">
+            <option v-if="!secciones.length" value="">Sin secciones</option>
+            <option v-for="s in secciones" :key="s.id" :value="s.id">Sección {{ s.nombre }}</option>
+          </select>
+        </div>
+        <div class="flex flex-col">
+          <label class="text-sm font-medium text-gray-700 mb-1">Asignatura</label>
+          <select v-model="asignacionId" class="px-4 py-2 border rounded-lg bg-white min-w-[12rem]">
+            <option v-if="!materias.length" value="">Sin asignaturas</option>
+            <option v-for="a in materias" :key="a.id" :value="a.id">{{ a.asignatura?.nombre ?? "Materia" }}</option>
           </select>
         </div>
         <p v-if="asignacionActual" class="text-sm text-gray-500">
