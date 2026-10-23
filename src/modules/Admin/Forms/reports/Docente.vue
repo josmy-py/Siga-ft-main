@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { reporteService } from "@/services/reporteService";
 import { asignacionService } from "@/services/asignacionService";
 import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
+import { textoNivelAcademico } from "@/services/nivelAcademico";
 
 // Portal director > Reportes > Reporte Docente (formulario y diseño de PDF de
 // Josmy, 20 y 21/10/2026). El backend genera el PDF con dompdf. Total de Docentes
@@ -143,7 +144,7 @@ const etiqueta = "block text-xs text-gray-500 mb-1";
           <span :class="etiqueta">Período</span>
           <select v-model="form.periodo_id" :class="entrada" required>
             <option value="" disabled>{{ periodos.length ? "Seleccione" : "Sin periodos" }}</option>
-            <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+            <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }} · {{ textoNivelAcademico(p.nivel) }}</option>
           </select>
         </label>
         <label class="block">

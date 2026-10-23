@@ -1,19 +1,32 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import Estudiantes from "@/modules/Admin/Estudiantes.vue";
 import RegistroCliente from "@/modules/Cliente/RegistroCliente.vue";
 import { estudianteService } from "@/services/estudianteService";
+import { anioLectivoService } from "@/services/calendarioService";
+import { gradoService } from "@/services/catalogoService";
+import { seccionService } from "@/services/seccionService";
 import { mensajeError } from "@/services/api";
 
 // Estudiantes de la dirección (19/10/2026): solo los que tienen una matrícula
 // aprobada y por eso están activos. Los inscritos (registrados por el encargado
-// sin matrícula aprobada) se atienden desde Matrículas. Búsqueda por nombre o NIE.
+// sin matrícula aprobada) se atienden desde Matrículas. Búsqueda por nombre o NIE
+// y filtros por año lectivo, grado y sección de la matrícula (23/10/2026).
 const estudiantes = ref([]);
 const cargando = ref(true);
 const error = ref("");
 
 const search = ref("");
+
+// Filtros ("" = todos). La sección depende del año: cada año tiene sus secciones
+const filtros = ref({ anio_lectivo_id: "", grado_id: "", seccion_id: "" });
+const anios = ref([]);
+const grados = ref([]);
+const secciones = ref([]);
+const seccionesDelGrado = computed(() =>
+  secciones.value.filter((s) => !filtros.value.grado_id || String(s.grado_id) === String(filtros.value.grado_id)),
+);
 
 const fichaId = ref(null);
 const edicionId = ref(null);
@@ -26,22 +39,71 @@ const etiquetaEstado = {
   graduado: "Graduado",
 };
 
+// Varios filtros pueden recargar seguido: solo vale la respuesta de la última consulta
+let consulta = 0;
 const cargar = async () => {
+  const actual = ++consulta;
   cargando.value = true;
   error.value = "";
   try {
-    estudiantes.value = await estudianteService.listar({ q: search.value.trim(), estado: "activo", con_matricula_aprobada: 1 });
+    const lista = await estudianteService.listar({
+      q: search.value.trim(),
+      estado: "activo",
+      con_matricula_aprobada: 1,
+      ...filtros.value,
+    });
+    if (actual === consulta) estudiantes.value = lista;
   } catch (e) {
-    error.value = mensajeError(e, "No se pudieron cargar los estudiantes.");
+    if (actual === consulta) error.value = mensajeError(e, "No se pudieron cargar los estudiantes.");
   } finally {
-    cargando.value = false;
+    if (actual === consulta) cargando.value = false;
   }
 };
 
-onMounted(cargar);
+onMounted(async () => {
+  cargar();
+  try {
+    const [listaAnios, { grados: listaGrados }] = await Promise.all([anioLectivoService.listar(), gradoService.getAll()]);
+    anios.value = listaAnios;
+    grados.value = listaGrados ?? [];
+  } catch {
+    // Sin catálogos los filtros quedan vacíos; la lista sigue funcionando
+  }
+});
+
+// Al cambiar el año se cargan sus secciones; al cambiar año o grado se quita la sección elegida
+watch(
+  () => filtros.value.anio_lectivo_id,
+  async (anioId) => {
+    filtros.value.seccion_id = "";
+    secciones.value = [];
+    if (anioId) {
+      try {
+        secciones.value = (await seccionService.listar({ anio_lectivo_id: anioId })).secciones ?? [];
+      } catch {
+        secciones.value = [];
+      }
+    }
+    cargar();
+  },
+);
+watch(
+  () => filtros.value.grado_id,
+  () => {
+    if (filtros.value.seccion_id && !seccionesDelGrado.value.some((s) => String(s.id) === String(filtros.value.seccion_id))) {
+      filtros.value.seccion_id = "";
+    }
+    cargar();
+  },
+);
+watch(() => filtros.value.seccion_id, cargar);
+
+// Año, grado y sección de la matrícula que cumple los filtros (o de la última)
+const matriculaDe = (est) => est.matriculas?.[0] ?? est.ultima_matricula;
 
 const limpiar = () => {
   search.value = "";
+  filtros.value = { anio_lectivo_id: "", grado_id: "", seccion_id: "" };
   cargar();
 };
 
@@ -76,6 +138,29 @@ const guardado = async (mensaje) => {
               placeholder="Buscar por nombre o NIE"
               class="flex-1 min-w-[220px] px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
+
+            <select v-model="filtros.anio_lectivo_id" aria-label="Año lectivo" class="px-3 py-2 border rounded-lg bg-white">
+              <option value="">Todos los años</option>
+              <option v-for="a in anios" :key="a.id" :value="a.id">Año {{ a.anio }}</option>
+            </select>
+
+            <select v-model="filtros.grado_id" aria-label="Grado" class="px-3 py-2 border rounded-lg bg-white">
+              <option value="">Todos los grados</option>
+              <option v-for="g in grados" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+            </select>
+
+            <select
+              v-model="filtros.seccion_id"
+              aria-label="Sección"
+              :disabled="!filtros.anio_lectivo_id"
+              :title="filtros.anio_lectivo_id ? '' : 'Elija primero el año lectivo'"
+              class="px-3 py-2 border rounded-lg bg-white disabled:bg-gray-100 disabled:text-gray-400"
+            >
+              <option value="">{{ filtros.anio_lectivo_id ? "Todas las secciones" : "Sección (elija el año)" }}</option>
+              <option v-for="s in seccionesDelGrado" :key="s.id" :value="s.id">
+                {{ filtros.grado_id ? s.nombre : `${s.grado?.nombre} ${s.nombre}` }}
+              </option>
+            </select>
 
             <button type="submit" class="bg-blue-600 border border-transparent hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
               Buscar
@@ -119,9 +204,9 @@ const guardado = async (mensaje) => {
                   <td class="p-3">{{ est.nie || "—" }}</td>
                   <td class="p-3 text-sm">{{ est.user?.email || "—" }}</td>
                   <td class="p-3">{{ etiquetaEstado[est.estado] ?? est.estado }}</td>
-                  <td class="p-3">{{ est.ultima_matricula?.anio_lectivo?.anio || "—" }}</td>
-                  <td class="p-3">{{ est.ultima_matricula?.seccion?.grado?.nombre || "—" }}</td>
-                  <td class="p-3">{{ est.ultima_matricula?.seccion?.nombre || "—" }}</td>
+                  <td class="p-3">{{ matriculaDe(est)?.anio_lectivo?.anio || "—" }}</td>
+                  <td class="p-3">{{ matriculaDe(est)?.seccion?.grado?.nombre || "—" }}</td>
+                  <td class="p-3">{{ matriculaDe(est)?.seccion?.nombre || "—" }}</td>
 
                   <td class="px-6 py-4">
                     <div class="flex justify-center gap-3">

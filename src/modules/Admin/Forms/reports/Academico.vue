@@ -39,6 +39,17 @@ const form = ref({
 
 const indicadores = ref(null);
 const periodos = ref([]);
+// Periodos del nivel académico elegido (periodo_escolares.nivel: 1 Parvularia y Básica, 2 Bachillerato)
+const periodosDelNivel = computed(() => {
+  const nivel = form.value.nivel === "Bachillerato" ? 2 : 1;
+  return periodos.value.filter((p) => Number(p.nivel) === nivel);
+});
+watch(
+  () => form.value.nivel,
+  () => {
+    if (!periodosDelNivel.value.some((p) => p.id === form.value.periodo_id)) form.value.periodo_id = periodosDelNivel.value[0]?.id ?? "";
+  },
+);
 const calculando = ref(false);
 const generando = ref(false);
 const avisoIndicadores = ref("");
@@ -55,7 +66,7 @@ onMounted(async () => {
     const anioId = lista[0]?.anio_lectivo_id;
     if (anioId) {
       periodos.value = await reporteService.periodos(anioId);
-      form.value.periodo_id = periodos.value[0]?.id ?? "";
+      form.value.periodo_id = periodosDelNivel.value[0]?.id ?? "";
     }
   } catch (e) {
     avisoIndicadores.value = mensaje(e, "No se pudieron cargar los periodos del año activo.");
@@ -150,8 +161,8 @@ const etiqueta = "block text-xs text-gray-500 mb-1";
         <label class="block">
           <span class="block text-sm text-gray-600 mb-1">Período</span>
           <select v-model="form.periodo_id" :class="entrada" required>
-            <option value="" disabled>{{ periodos.length ? "Seleccione" : "Sin periodos" }}</option>
-            <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+            <option value="" disabled>{{ periodosDelNivel.length ? "Seleccione" : "Sin periodos" }}</option>
+            <option v-for="p in periodosDelNivel" :key="p.id" :value="p.id">{{ p.nombre }}</option>
           </select>
         </label>
         <label class="block">

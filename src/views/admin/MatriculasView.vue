@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import { matriculaService, TURNOS } from "@/services/matriculaService";
+import { anioLectivoService } from "@/services/calendarioService";
 import { erroresCampos, mensajeError } from "@/services/api";
 
 // M6: revisión de matrículas por la dirección (API real). El responsable ya
@@ -15,6 +16,9 @@ const ESTADOS = [
 
 const estado = ref("pendiente");
 const q = ref("");
+// Filtro por año lectivo de la matrícula ("" = todos los años)
+const anios = ref([]);
+const anioId = ref("");
 const matriculas = ref([]);
 const resumen = ref({ pendiente: 0, aprobado: 0, rechazado: 0 });
 const cargando = ref(false);
@@ -35,7 +39,7 @@ const cargar = async () => {
   cargando.value = true;
   error.value = "";
   try {
-    const datos = await matriculaService.listar({ estado: estado.value, q: q.value.trim() });
+    const datos = await matriculaService.listar({ estado: estado.value, q: q.value.trim(), anio_lectivo_id: anioId.value });
     matriculas.value = datos.matriculas;
     resumen.value = datos.resumen;
   } catch (e) {
@@ -45,8 +49,15 @@ const cargar = async () => {
   }
 };
 
-onMounted(cargar);
-watch(estado, cargar);
+onMounted(async () => {
+  cargar();
+  try {
+    anios.value = await anioLectivoService.listar();
+  } catch {
+    anios.value = [];
+  }
+});
+watch([estado, anioId], cargar);
 
 let espera = null;
 watch(q, () => {
@@ -178,7 +189,13 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
       </div>
 
       <div class="px-6">
-        <input v-model="q" placeholder="Buscar por nombre o NIE" class="w-full md:w-80 border rounded-lg px-3 py-2 mb-4" />
+        <div class="flex flex-wrap gap-3 mb-4">
+          <input v-model="q" placeholder="Buscar por nombre o NIE" class="w-full md:w-80 border rounded-lg px-3 py-2" />
+          <select v-model="anioId" class="w-full md:w-56 border rounded-lg px-3 py-2 bg-white" aria-label="Año lectivo">
+            <option value="">Todos los años</option>
+            <option v-for="a in anios" :key="a.id" :value="a.id">Año {{ a.anio }}</option>
+          </select>
+        </div>
         <p v-if="error" class="text-red-600">{{ error }}</p>
 
         <div class="bg-white rounded-xl shadow overflow-x-auto">
@@ -196,7 +213,7 @@ const fecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-SV") : 
             </thead>
             <tbody>
               <tr v-if="cargando"><td colspan="7" class="p-4 text-gray-500">Cargando…</td></tr>
-              <tr v-else-if="!matriculas.length"><td colspan="7" class="p-4 text-gray-500">No hay matrículas en este estado.</td></tr>
+              <tr v-else-if="!matriculas.length"><td colspan="7" class="p-4 text-gray-500">No hay matrículas en este estado{{ anioId ? " para el año elegido" : "" }}.</td></tr>
               <tr v-for="m in matriculas" :key="m.id" class="border-t">
                 <td class="p-3 font-medium">{{ m.estudiante?.nombre }}</td>
                 <td class="p-3">{{ m.estudiante?.nie || "—" }}</td>

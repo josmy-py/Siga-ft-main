@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { reporteService } from "../../services/reporteService";
+import { periodosDelGrado } from "@/services/nivelAcademico";
 
 // M12: Reporte de notas o de conducta de una sección en un periodo.
 // ambito "docente" (Libreta) o "director" (Generar reportes académicos).
@@ -42,7 +43,9 @@ watch(seccionId, async () => {
   reporte.value = null;
   if (!seccionActual.value) return;
   try {
-    periodos.value = await reporteService.periodos(seccionActual.value.anio_lectivo_id);
+    // Solo los periodos del nivel académico de la sección
+    const grado = seccionActual.value.grado;
+    periodos.value = periodosDelGrado(await reporteService.periodos(seccionActual.value.anio_lectivo_id), grado?.nombre ?? grado);
     periodoId.value = periodos.value[0]?.id ?? "";
   } catch (e) {
     error.value = mensaje(e, "No se pudieron cargar los periodos.");

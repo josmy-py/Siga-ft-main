@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import Swal from "sweetalert2";
 import { useAuthStore } from "@/stores/authStore";
 import { reporteService } from "@/services/reporteService";
@@ -42,6 +42,17 @@ const form = ref({
 });
 
 const periodos = ref([]);
+// Periodos del nivel académico elegido (periodo_escolares.nivel: 1 Parvularia y Básica, 2 Bachillerato)
+const periodosDelNivel = computed(() => {
+  const nivel = form.value.nivel === "Bachillerato" ? 2 : 1;
+  return periodos.value.filter((p) => Number(p.nivel) === nivel);
+});
+watch(
+  () => form.value.nivel,
+  () => {
+    if (!periodosDelNivel.value.some((p) => p.id === form.value.periodo_id)) form.value.periodo_id = periodosDelNivel.value[0]?.id ?? "";
+  },
+);
 const indicadores = ref(null);
 const cargando = ref(false);
 const generando = ref(false);
@@ -55,7 +66,7 @@ onMounted(async () => {
     const carga = await asignacionService.listar();
     if (carga.anio_lectivo_id) {
       periodos.value = await reporteService.periodos(carga.anio_lectivo_id);
-      form.value.periodo_id = periodos.value[0]?.id ?? "";
+      form.value.periodo_id = periodosDelNivel.value[0]?.id ?? "";
     }
   } catch (e) {
     aviso.value = mensaje(e, "No se pudieron cargar los periodos del año activo.");
@@ -157,8 +168,8 @@ const icono = "w-11 h-11 rounded-lg flex items-center justify-center shrink-0";
           <label class="block">
             <span :class="etiqueta">Período</span>
             <select v-model="form.periodo_id" :class="entrada" required>
-              <option value="" disabled>{{ periodos.length ? "Seleccione" : "Sin periodos" }}</option>
-              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+              <option value="" disabled>{{ periodosDelNivel.length ? "Seleccione" : "Sin periodos" }}</option>
+              <option v-for="p in periodosDelNivel" :key="p.id" :value="p.id">{{ p.nombre }}</option>
             </select>
           </label>
           <label class="block">

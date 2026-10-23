@@ -4,6 +4,7 @@ import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { reporteService } from "@/services/reporteService";
 import { fechaLegible, hoy } from "@/components/reportes/documentoReporte";
+import { periodosDelGrado } from "@/services/nivelAcademico";
 
 // Portal docente > Reportes > Boletas de Calificaciones: libreta de notas de un
 // estudiante (formulario de Josmy, 20/10/2026). Las asignaturas y calificaciones
@@ -42,6 +43,13 @@ const grados = computed(() => {
   return [...unicos].map(([id, nombre]) => ({ id, nombre }));
 });
 const seccionesDelGrado = computed(() => carga.value.filter((s) => String(s.grado_id) === String(form.value.grado_id)));
+// Periodos del nivel académico del grado elegido (Parvularia y Básica o Bachillerato)
+const periodosDelNivel = computed(() =>
+  periodosDelGrado(periodos.value, carga.value.find((s) => String(s.grado_id) === String(form.value.grado_id))?.grado),
+);
+watch(periodosDelNivel, (lista) => {
+  if (form.value.periodo_id && !lista.some((p) => String(p.id) === String(form.value.periodo_id))) form.value.periodo_id = "";
+});
 const profesorResponsable = computed(() => notas.value?.seccion?.profesor?.nombre ?? "");
 const estudiantes = computed(() => notas.value?.estudiantes ?? []);
 const estudianteActual = computed(() => estudiantes.value.find((e) => String(e.matricula_id) === String(form.value.matricula_id)));
@@ -204,7 +212,7 @@ const boton = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm";
             <i :class="[icono, 'pi-clock']"></i>
             <select v-model="form.periodo_id" :class="conIcono" required>
               <option value="" disabled>Selecciona un período</option>
-              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+              <option v-for="p in periodosDelNivel" :key="p.id" :value="p.id">{{ p.nombre }}</option>
             </select>
           </span>
         </label>

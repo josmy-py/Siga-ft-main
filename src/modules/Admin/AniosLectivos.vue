@@ -33,15 +33,24 @@ const edicionPeriodos = ref({});
 const erroresPeriodos = ref({});
 
 // Formulario "Agregar periodo": campos del diagrama (nombre y nivel)
+// nivel = nivel académico del periodo (23/10/2026): 1 Parvularia y Básica, 2 Bachillerato.
+// Cada nivel tiene sus propios periodos (hasta 6 por año).
 const MAX_PERIODOS = 6;
+const NIVELES = [
+  { valor: 1, texto: "Parvularia y Educación Básica" },
+  { valor: 2, texto: "Bachillerato" },
+];
+const textoNivel = (nivel) => {
+  const n = NIVELES.find((x) => x.valor === Number(nivel));
+  return n ? `${n.valor} · ${n.texto}` : nivel ?? "—";
+};
 const formPeriodo = ref(null);
 const erroresPeriodo = ref({});
 
 const seleccionado = computed(() => anios.value.find((a) => a.id === seleccionadoId.value) ?? null);
-const nivelesUsados = computed(() => (seleccionado.value?.periodos ?? []).map((p) => p.nivel));
-const nivelesLibres = computed(() =>
-  Array.from({ length: MAX_PERIODOS }, (_, i) => i + 1).filter((n) => !nivelesUsados.value.includes(n)),
-);
+const periodosDelNivel = (nivel) => (seleccionado.value?.periodos ?? []).filter((p) => Number(p.nivel) === Number(nivel));
+// Niveles que todavía admiten periodos en el año seleccionado
+const nivelesConCupo = computed(() => NIVELES.filter((n) => periodosDelNivel(n.valor).length < MAX_PERIODOS));
 
 const fecha = (valor) => {
   if (!valor) return "Sin fecha";
@@ -53,7 +62,7 @@ const prepararPeriodos = () => {
   edicionPeriodos.value = Object.fromEntries(
     (seleccionado.value?.periodos ?? []).map((p) => [
       p.id,
-      { nombre: p.nombre ?? "" },
+      { nombre: p.nombre ?? "", nivel: p.nivel },
     ]),
   );
   erroresPeriodos.value = {};
@@ -181,10 +190,20 @@ const eliminarAnio = async () => {
 
 const NOMBRES_SUGERIDOS = ["Primer trimestre", "Segundo trimestre", "Tercer trimestre", "Cuarto periodo", "Quinto periodo", "Sexto periodo"];
 
+// Nombre sugerido: el siguiente trimestre o periodo del nivel elegido
+const nombreSugerido = (nivel) => NOMBRES_SUGERIDOS[periodosDelNivel(nivel).length] ?? "";
+
 const abrirFormPeriodo = () => {
-  const nivel = nivelesLibres.value[0] ?? 1;
-  formPeriodo.value = { nombre: NOMBRES_SUGERIDOS[nivel - 1] ?? "", nivel };
+  const nivel = nivelesConCupo.value[0]?.valor ?? 1;
+  formPeriodo.value = { nombre: nombreSugerido(nivel), nivel };
   erroresPeriodo.value = {};
+};
+
+// Al cambiar de nivel se actualiza el nombre si aún es una sugerencia
+const cambiarNivelForm = () => {
+  if (!formPeriodo.value.nombre || NOMBRES_SUGERIDOS.includes(formPeriodo.value.nombre)) {
+    formPeriodo.value.nombre = nombreSugerido(formPeriodo.value.nivel);
+  }
 };
 
 const guardarNuevoPeriodo = async () => {
@@ -220,7 +239,8 @@ const guardarPeriodo = async (periodo) => {
   }
 };
 
-const hayPeriodoEnCurso = computed(() => (seleccionado.value?.periodos ?? []).some((p) => p.estado === "activo"));
+// Un periodo activo a la vez en cada nivel académico
+const hayPeriodoEnCurso = (nivel) => periodosDelNivel(nivel).some((p) => p.estado === "activo");
 
 const CAMBIOS_ESTADO = {
   activo: { pregunta: (p) => `¿Iniciar ${p.nombre}?`, texto: "Queda activo: los docentes registran sus notas y conducta." },
@@ -406,7 +426,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
           <div class="bg-white rounded-3xl shadow-xl p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-semibold text-slate-800">Periodos</h3>
-              <button v-if="seleccionado.estado !== 'cierre' && (seleccionado.periodos?.length ?? 0) < MAX_PERIODOS && !formPeriodo" :disabled="ocupado" @click="abrirFormPeriodo"
+              <button v-if="seleccionado.estado !== 'cierre' && nivelesConCupo.length && !formPeriodo" :disabled="ocupado" @click="abrirFormPeriodo"
                 :class="[botonBase, 'border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white']">
                 <i class="pi pi-plus"></i> Agregar periodo
               </button>
@@ -423,9 +443,9 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
               </label>
 
               <label class="text-sm text-slate-600">
-                Nivel (n.º del periodo)
-                <select v-model.number="formPeriodo.nivel" :class="entradaInput" required>
-                  <option v-for="n in nivelesLibres" :key="n" :value="n">{{ n }}</option>
+                Nivel académico
+                <select v-model.number="formPeriodo.nivel" :class="entradaInput" required @change="cambiarNivelForm">
+                  <option v-for="n in nivelesConCupo" :key="n.valor" :value="n.valor">{{ n.valor }} · {{ n.texto }}</option>
                 </select>
                 <span v-if="erroresPeriodo.nivel" class="text-red-600 text-xs">{{ erroresPeriodo.nivel }}</span>
               </label>
@@ -452,7 +472,7 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
               <table v-if="seleccionado.periodos?.length" class="w-full min-w-[680px] border-collapse">
                 <thead>
                   <tr>
-                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nivel</th>
+                    <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nivel académico</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Nombre</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Estado</th>
                     <th class="text-left bg-slate-100 px-3 py-2 text-slate-600 font-semibold">Acciones</th>
@@ -460,15 +480,22 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                 </thead>
                 <tbody>
                   <tr v-for="periodo in seleccionado.periodos" :key="periodo.id" class="align-top">
-                    <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nivel }}</td>
-
                     <template v-if="seleccionado.estado !== 'cierre' && edicionPeriodos[periodo.id]">
+                      <!-- El nivel solo cambia mientras el periodo está pendiente (sin notas ni conducta) -->
+                      <td class="px-3 py-3 border-b border-slate-200">
+                        <select v-if="periodo.estado === 'pendiente'" v-model.number="edicionPeriodos[periodo.id].nivel" :class="[entradaInput, 'min-w-[17rem]']">
+                          <option v-for="n in NIVELES" :key="n.valor" :value="n.valor">{{ n.valor }} · {{ n.texto }}</option>
+                        </select>
+                        <span v-else>{{ textoNivel(periodo.nivel) }}</span>
+                        <span v-if="erroresPeriodos[periodo.id]?.nivel" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nivel }}</span>
+                      </td>
                       <td class="px-3 py-3 border-b border-slate-200">
                         <input v-model.trim="edicionPeriodos[periodo.id].nombre" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
                         <span v-if="erroresPeriodos[periodo.id]?.nombre" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre }}</span>
                       </td>
                     </template>
                     <template v-else>
+                      <td class="px-3 py-3 border-b border-slate-200">{{ textoNivel(periodo.nivel) }}</td>
                       <td class="px-3 py-3 border-b border-slate-200">{{ periodo.nombre }}</td>
                     </template>
 
@@ -480,9 +507,9 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
 
                     <td class="px-3 py-3 border-b border-slate-200">
                       <div class="flex flex-wrap gap-2">
-                        <!-- Estado: solo con el año activo y un periodo activo a la vez -->
+                        <!-- Estado: solo con el año activo y un periodo activo a la vez en cada nivel -->
                         <template v-if="seleccionado.estado === 'activo'">
-                          <button v-if="periodo.estado !== 'activo' && !hayPeriodoEnCurso" :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'activo')"
+                          <button v-if="periodo.estado !== 'activo' && !hayPeriodoEnCurso(periodo.nivel)" :disabled="ocupado" @click="cambiarEstadoPeriodo(periodo, 'activo')"
                             :class="[botonBase, 'border-green-600 text-green-700 hover:bg-green-600 hover:text-white']">
                             <i :class="periodo.estado === 'cerrado' ? 'pi pi-replay' : 'pi pi-play'"></i>
                             {{ periodo.estado === "cerrado" ? "Reabrir" : "Iniciar" }}
@@ -516,7 +543,8 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             </div>
 
             <p class="text-xs text-slate-500 mt-3">
-              Las notas y la conducta se registran en los periodos del año activo que no estén cerrados.
+              Cada nivel académico tiene sus propios periodos: las secciones de Parvularia y Educación Básica usan los de nivel 1
+              y las de Bachillerato los de nivel 2. Las notas y la conducta se registran en los periodos del año activo que no estén cerrados.
               El año lectivo se cierra cuando todos sus periodos están cerrados.
             </p>
           </div>
