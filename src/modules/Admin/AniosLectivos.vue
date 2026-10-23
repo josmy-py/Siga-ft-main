@@ -34,16 +34,15 @@ const erroresPeriodos = ref({});
 
 // Formulario "Agregar periodo": campos del diagrama (nombre y nivel)
 // nivel = nivel académico del periodo (23/10/2026): 1 Parvularia y Básica, 2 Bachillerato.
-// Cada nivel tiene sus propios periodos (hasta 6 por año).
+// Cada nivel tiene sus propios periodos (hasta 6 por año). Pedido de Josmy (23/10/2026):
+// el nivel se muestra solo como 1 o 2 y no se edita después de crear el periodo; el
+// nombre del formulario empieza vacío.
 const MAX_PERIODOS = 6;
 const NIVELES = [
   { valor: 1, texto: "Parvularia y Educación Básica" },
   { valor: 2, texto: "Bachillerato" },
 ];
-const textoNivel = (nivel) => {
-  const n = NIVELES.find((x) => x.valor === Number(nivel));
-  return n ? `${n.valor} · ${n.texto}` : nivel ?? "—";
-};
+const textoNivel = (nivel) => nivel ?? "—";
 const formPeriodo = ref(null);
 const erroresPeriodo = ref({});
 
@@ -62,7 +61,7 @@ const prepararPeriodos = () => {
   edicionPeriodos.value = Object.fromEntries(
     (seleccionado.value?.periodos ?? []).map((p) => [
       p.id,
-      { nombre: p.nombre ?? "", nivel: p.nivel },
+      { nombre: p.nombre ?? "" },
     ]),
   );
   erroresPeriodos.value = {};
@@ -188,22 +187,10 @@ const eliminarAnio = async () => {
 
 // ---------- Periodos ----------
 
-const NOMBRES_SUGERIDOS = ["Primer trimestre", "Segundo trimestre", "Tercer trimestre", "Cuarto periodo", "Quinto periodo", "Sexto periodo"];
-
-// Nombre sugerido: el siguiente trimestre o periodo del nivel elegido
-const nombreSugerido = (nivel) => NOMBRES_SUGERIDOS[periodosDelNivel(nivel).length] ?? "";
-
+// El nombre empieza vacío (lo escribe el director)
 const abrirFormPeriodo = () => {
-  const nivel = nivelesConCupo.value[0]?.valor ?? 1;
-  formPeriodo.value = { nombre: nombreSugerido(nivel), nivel };
+  formPeriodo.value = { nombre: "", nivel: nivelesConCupo.value[0]?.valor ?? 1 };
   erroresPeriodo.value = {};
-};
-
-// Al cambiar de nivel se actualiza el nombre si aún es una sugerencia
-const cambiarNivelForm = () => {
-  if (!formPeriodo.value.nombre || NOMBRES_SUGERIDOS.includes(formPeriodo.value.nombre)) {
-    formPeriodo.value.nombre = nombreSugerido(formPeriodo.value.nivel);
-  }
 };
 
 const guardarNuevoPeriodo = async () => {
@@ -438,14 +425,14 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
 
               <label class="text-sm text-slate-600 md:col-span-2">
                 Nombre del periodo
-                <input v-model.trim="formPeriodo.nombre" maxlength="50" placeholder="Primer trimestre" :class="entradaInput" required />
+                <input v-model.trim="formPeriodo.nombre" maxlength="50" :class="entradaInput" required />
                 <span v-if="erroresPeriodo.nombre" class="text-red-600 text-xs">{{ erroresPeriodo.nombre }}</span>
               </label>
 
               <label class="text-sm text-slate-600">
                 Nivel académico
-                <select v-model.number="formPeriodo.nivel" :class="entradaInput" required @change="cambiarNivelForm">
-                  <option v-for="n in nivelesConCupo" :key="n.valor" :value="n.valor">{{ n.valor }} · {{ n.texto }}</option>
+                <select v-model.number="formPeriodo.nivel" :class="entradaInput" required>
+                  <option v-for="n in nivelesConCupo" :key="n.valor" :value="n.valor">{{ n.valor }}</option>
                 </select>
                 <span v-if="erroresPeriodo.nivel" class="text-red-600 text-xs">{{ erroresPeriodo.nivel }}</span>
               </label>
@@ -481,14 +468,8 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
                 <tbody>
                   <tr v-for="periodo in seleccionado.periodos" :key="periodo.id" class="align-top">
                     <template v-if="seleccionado.estado !== 'cierre' && edicionPeriodos[periodo.id]">
-                      <!-- El nivel solo cambia mientras el periodo está pendiente (sin notas ni conducta) -->
-                      <td class="px-3 py-3 border-b border-slate-200">
-                        <select v-if="periodo.estado === 'pendiente'" v-model.number="edicionPeriodos[periodo.id].nivel" :class="[entradaInput, 'min-w-[17rem]']">
-                          <option v-for="n in NIVELES" :key="n.valor" :value="n.valor">{{ n.valor }} · {{ n.texto }}</option>
-                        </select>
-                        <span v-else>{{ textoNivel(periodo.nivel) }}</span>
-                        <span v-if="erroresPeriodos[periodo.id]?.nivel" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nivel }}</span>
-                      </td>
+                      <!-- El nivel no se edita después de crear el periodo -->
+                      <td class="px-3 py-3 border-b border-slate-200">{{ textoNivel(periodo.nivel) }}</td>
                       <td class="px-3 py-3 border-b border-slate-200">
                         <input v-model.trim="edicionPeriodos[periodo.id].nombre" maxlength="50" :class="[entradaInput, 'min-w-[9rem]']" />
                         <span v-if="erroresPeriodos[periodo.id]?.nombre" class="text-red-600 text-xs">{{ erroresPeriodos[periodo.id].nombre }}</span>
@@ -543,8 +524,8 @@ const botonBase = "flex items-center gap-2 px-3 py-2 rounded-xl border transitio
             </div>
 
             <p class="text-xs text-slate-500 mt-3">
-              Cada nivel académico tiene sus propios periodos: las secciones de Parvularia y Educación Básica usan los de nivel 1
-              y las de Bachillerato los de nivel 2. Las notas y la conducta se registran en los periodos del año activo que no estén cerrados.
+              Nivel 1: Parvularia y Educación Básica · Nivel 2: Bachillerato. Cada nivel tiene sus propios periodos y su nivel
+              no se cambia después de crearlo. Las notas y la conducta se registran en los periodos del año activo que no estén cerrados.
               El año lectivo se cierra cuando todos sus periodos están cerrados.
             </p>
           </div>

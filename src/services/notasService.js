@@ -12,6 +12,13 @@ export const notasService = {
     return data
   },
 
+  // Mis estudiantes > Ver: { estudiante: { nombre, nie, genero, fecha_nacimiento }, padres: [{ nombre, parentesco, dui,
+  // telefono, email }], encargado: { nombre, dui, parentesco, telefono } | null, es_trasladado }
+  async fichaEstudiante(asignacionId, matriculaId) {
+    const { data } = await api.get(`/docente/asignaciones/${asignacionId}/estudiantes/${matriculaId}`)
+    return data
+  },
+
   // { periodo, evaluaciones, porcentaje_usado, porcentaje_disponible, editable }
   async evaluaciones(asignacionId, periodoId) {
     const { data } = await api.get(`/docente/asignaciones/${asignacionId}/evaluaciones`, {

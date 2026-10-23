@@ -91,13 +91,29 @@ onMounted(async () => {
 
 watch(asignacionId, cargarEstudiantes);
 
-// MODAL
+// MODAL: ficha del estudiante (pedido de Josmy, 23/10/2026): datos, padres con DUI,
+// encargado de la matrícula y "Proviene de otra institución" solo si es verdad
 const showModal = ref(false);
 const selectedStudent = ref(null);
+const ficha = ref(null);
+const cargandoFicha = ref(false);
+const errorFicha = ref("");
 
-const verEstudiante = (matricula) => {
+const fecha = (valor) => (valor ? valor.split("-").reverse().join("/") : "—");
+
+const verEstudiante = async (matricula) => {
   selectedStudent.value = matricula.estudiante;
+  ficha.value = null;
+  errorFicha.value = "";
   showModal.value = true;
+  cargandoFicha.value = true;
+  try {
+    ficha.value = await notasService.fichaEstudiante(asignacionId.value, matricula.id);
+  } catch (e) {
+    errorFicha.value = mensaje(e, "No se pudieron cargar los datos del estudiante.");
+  } finally {
+    cargandoFicha.value = false;
+  }
 };
 </script>
 
@@ -188,24 +204,62 @@ const verEstudiante = (matricula) => {
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="showModal = false"
       >
-        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-          <h2 class="text-lg font-bold text-gray-800 mb-4">{{ selectedStudent?.nombre }}</h2>
-          <dl class="space-y-2 text-sm">
-            <div class="flex justify-between">
-              <dt class="text-gray-500">NIE</dt>
-              <dd class="font-medium">{{ selectedStudent?.nie }}</dd>
+        <div class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <h2 class="text-lg font-bold text-gray-800">{{ selectedStudent?.nombre }}</h2>
+            <span
+              v-if="ficha?.es_trasladado"
+              class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"
+            >
+              Proviene de otra institución
+            </span>
+          </div>
+
+          <p v-if="cargandoFicha" class="text-sm text-gray-500"><i class="pi pi-spin pi-spinner mr-2"></i>Cargando...</p>
+          <p v-else-if="errorFicha" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ errorFicha }}</p>
+
+          <template v-else-if="ficha">
+            <h3 class="mb-2 text-sm font-semibold uppercase text-gray-500">Datos del estudiante</h3>
+            <dl class="space-y-2 text-sm">
+              <div class="flex justify-between gap-4">
+                <dt class="text-gray-500">NIE</dt>
+                <dd class="font-medium">{{ ficha.estudiante.nie || "—" }}</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-gray-500">Fecha de nacimiento</dt>
+                <dd class="font-medium">{{ fecha(ficha.estudiante.fecha_nacimiento) }}</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-gray-500">Género</dt>
+                <dd class="font-medium">{{ ficha.estudiante.genero || "—" }}</dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-gray-500">Grado</dt>
+                <dd class="font-medium">
+                  {{ asignacionActual?.seccion?.grado?.nombre }} {{ asignacionActual?.seccion?.nombre }}
+                </dd>
+              </div>
+            </dl>
+
+            <h3 class="mb-2 mt-5 text-sm font-semibold uppercase text-gray-500">Padres</h3>
+            <div v-for="p in ficha.padres" :key="p.dui" class="mb-2 rounded-xl bg-gray-50 p-3 text-sm">
+              <p class="font-semibold text-gray-800">{{ p.nombre }} <span class="font-normal text-gray-500">({{ p.parentesco }})</span></p>
+              <p class="text-gray-600">DUI: {{ p.dui || "—" }} · Teléfono: {{ p.telefono || "—" }}</p>
+              <p v-if="p.email" class="text-gray-600">Correo: {{ p.email }}</p>
             </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Género</dt>
-              <dd class="font-medium">{{ selectedStudent?.genero }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-gray-500">Grado</dt>
-              <dd class="font-medium">
-                {{ asignacionActual?.seccion?.grado?.nombre }} {{ asignacionActual?.seccion?.nombre }}
-              </dd>
-            </div>
-          </dl>
+            <p v-if="!ficha.padres.length" class="text-sm text-gray-500">Sin padres registrados.</p>
+
+            <template v-if="ficha.encargado">
+              <h3 class="mb-2 mt-5 text-sm font-semibold uppercase text-gray-500">Encargado</h3>
+              <div class="rounded-xl bg-gray-50 p-3 text-sm">
+                <p class="font-semibold text-gray-800">
+                  {{ ficha.encargado.nombre }} <span class="font-normal text-gray-500">({{ ficha.encargado.parentesco }})</span>
+                </p>
+                <p class="text-gray-600">DUI: {{ ficha.encargado.dui || "—" }} · Teléfono: {{ ficha.encargado.telefono || "—" }}</p>
+              </div>
+            </template>
+          </template>
+
           <div class="mt-6 text-right">
             <button class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200" @click="showModal = false">
               Cerrar

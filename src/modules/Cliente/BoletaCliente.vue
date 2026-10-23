@@ -232,25 +232,32 @@ const getConductaClass = (valoracion) =>
                 <thead class="bg-blue-900 text-white">
                   <tr>
                     <th class="px-6 py-4 text-left">Periodo</th>
-                    <th class="px-6 py-4 text-left">Observación</th>
+                    <th class="px-6 py-4 text-left">Criterio</th>
                     <th class="px-6 py-4 text-center w-48">Valoración</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                  <tr v-for="fila in conducta?.periodos ?? []" :key="fila.periodo.id" class="hover:bg-blue-50/50 transition">
-                    <td class="px-6 py-5 font-semibold text-gray-800">{{ fila.periodo.nombre }}</td>
-                    <td class="px-6 py-5 font-medium text-gray-700">
-                      {{ fila.conducta?.descripcion ?? "Sin registrar" }}
-                    </td>
-                    <td class="px-6 py-5 text-center">
-                      <span
-                        class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide"
-                        :class="getConductaClass(fila.conducta?.valoracion)"
-                      >
-                        {{ fila.conducta?.valoracion ?? "—" }}
-                      </span>
-                    </td>
-                  </tr>
+                  <!-- Una fila por criterio evaluado (pedido de Josmy, 23/10/2026) -->
+                  <template v-for="fila in conducta?.periodos ?? []" :key="fila.periodo.id">
+                    <tr v-if="!fila.conductas?.length" class="hover:bg-blue-50/50 transition">
+                      <td class="px-6 py-5 font-semibold text-gray-800">{{ fila.periodo.nombre }}</td>
+                      <td class="px-6 py-5 font-medium text-gray-500">Sin registrar</td>
+                      <td class="px-6 py-5 text-center">
+                        <span class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide" :class="getConductaClass(null)">—</span>
+                      </td>
+                    </tr>
+                    <tr v-for="(c, i) in fila.conductas ?? []" :key="`${fila.periodo.id}-${i}`" class="hover:bg-blue-50/50 transition">
+                      <td v-if="i === 0" :rowspan="fila.conductas.length" class="px-6 py-5 font-semibold text-gray-800 align-top">
+                        {{ fila.periodo.nombre }}
+                      </td>
+                      <td class="px-6 py-3 font-medium text-gray-700">{{ c.descripcion }}</td>
+                      <td class="px-6 py-3 text-center">
+                        <span class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide" :class="getConductaClass(c.valoracion)">
+                          {{ c.valoracion }}
+                        </span>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
