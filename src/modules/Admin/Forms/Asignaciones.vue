@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import Swal from "sweetalert2";
 import { asignacionService } from "@/services/asignacionService";
 import { seccionService, TURNOS } from "@/services/seccionService";
-import { planEstudioService, planAsignaturaService } from "@/services/catalogoService";
+import { planEstudioService, asignaturaService } from "@/services/catalogoService";
 import { mensajeError } from "@/services/api";
 
 // M4 (tesis, pág. 65): el director elige un docente, marca los grados y las
@@ -33,7 +33,7 @@ const guardando = ref(false);
 const errorGeneral = ref(null);
 
 const gradosSeleccionados = ref([]);
-// Claves "seccion-plan_asignatura" marcadas para el docente (materia de un plan)
+// Claves "seccion-asignatura" marcadas para el docente
 const seleccion = ref(new Set());
 // Plan elegido a mano en secciones con varios planes vigentes y sin materias aún
 const planElegido = ref({});
@@ -47,7 +47,7 @@ const deOtros = computed(() =>
   new Map(
     props.asignaciones
       .filter((a) => a.profesor_id !== Number(filtros.value.profesor))
-      .map((a) => [clave(a.seccion_id, a.plan_asignatura_id), a])
+      .map((a) => [clave(a.seccion_id, a.asignatura_id), a])
   )
 );
 
@@ -59,7 +59,7 @@ const grados = computed(() => {
 });
 
 const reiniciarSeleccion = () => {
-  seleccion.value = new Set(propias.value.map((a) => clave(a.seccion_id, a.plan_asignatura_id)));
+  seleccion.value = new Set(propias.value.map((a) => clave(a.seccion_id, a.asignatura_id)));
   gradosSeleccionados.value = [...new Set(propias.value.map((a) => a.seccion?.grado_id))];
   planElegido.value = {};
   errorGeneral.value = null;
@@ -72,11 +72,11 @@ onMounted(async () => {
     const [respuestaSecciones, vigentes, respuestaAsignaturas] = await Promise.all([
       seccionService.listar({ anio_lectivo_id: props.anio.id }),
       planEstudioService.listar({ vigente: 1 }),
-      planAsignaturaService.delPlan(),
+      asignaturaService.getAll(),
     ]);
     secciones.value = respuestaSecciones.secciones;
     planes.value = vigentes;
-    asignaturas.value = respuestaAsignaturas;
+    asignaturas.value = respuestaAsignaturas.asignaturas;
     reiniciarSeleccion();
   } catch (error) {
     errorGeneral.value = mensajeError(error, "No se pudieron cargar las secciones y los planes de estudio");
@@ -102,7 +102,7 @@ const vistaSecciones = computed(() =>
     .map((s) => {
       const opciones = planes.value;
       const otros = props.asignaciones.filter((a) => a.seccion_id === s.id && a.profesor_id !== Number(filtros.value.profesor));
-      const planFijo = otros[0]?.plan_asignatura?.plan_estudio_id ?? null;
+      const planFijo = otros[0]?.asignatura?.plan_estudio_id ?? null;
       const planMarcado = marcadasEn(s.id)
         .map((id) => asignaturaPorId.value.get(id)?.plan_estudio_id)
         .find(Boolean);
@@ -111,7 +111,7 @@ const vistaSecciones = computed(() =>
       const materias = asignaturas.value.filter((a) => a.plan_estudio_id === planId);
       // Materias propias de un plan que ya no está vigente: se muestran para no quitarlas sin querer
       for (const a of propias.value.filter((p) => p.seccion_id === s.id)) {
-        if (!materias.some((m) => m.id === a.plan_asignatura_id)) materias.push({ ...a.plan_asignatura, nombre: a.asignatura?.nombre, antigua: true });
+        if (!materias.some((m) => m.id === a.asignatura_id)) materias.push({ ...a.asignatura, antigua: true });
       }
 
       return {
@@ -119,7 +119,7 @@ const vistaSecciones = computed(() =>
         opciones,
         planId,
         planFijo: !!planFijo,
-        plan: opciones.find((p) => p.id === planId) ?? otros[0]?.plan_asignatura?.plan_estudio ?? null,
+        plan: opciones.find((p) => p.id === planId) ?? otros[0]?.asignatura?.plan_estudio ?? null,
         materias: materias.sort((a, b) => a.nombre.localeCompare(b.nombre)),
       };
     })
@@ -159,7 +159,7 @@ const reasignar = async (asignacion) => {
   if (!isConfirmed) return;
   try {
     const { message } = await asignacionService.cambiarDocente(asignacion.id, docente.id);
-    seleccion.value = new Set([...seleccion.value, clave(asignacion.seccion_id, asignacion.plan_asignatura_id)]);
+    seleccion.value = new Set([...seleccion.value, clave(asignacion.seccion_id, asignacion.asignatura_id)]);
     emit("cambio");
     Swal.fire({ icon: "success", title: message, timer: 2500, showConfirmButton: false });
   } catch (error) {
@@ -176,8 +176,8 @@ const guardarAsignacion = async () => {
   guardando.value = true;
   try {
     const items = [...seleccion.value].map((k) => {
-      const [seccion_id, plan_asignatura_id] = k.split("-").map(Number);
-      return { seccion_id, plan_asignatura_id };
+      const [seccion_id, asignatura_id] = k.split("-").map(Number);
+      return { seccion_id, asignatura_id };
     });
     const respuesta = await asignacionService.guardarCarga(filtros.value.profesor, props.anio.id, items);
     emit("guardado", `${respuesta.message}: ${respuesta.creadas} agregada(s), ${respuesta.eliminadas} quitada(s)`);

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import Swal from "sweetalert2";
-import { planAsignaturaService } from "@/services/catalogoService";
+import { asignaturaService } from "@/services/catalogoService";
 import { erroresCampos, mensajeError } from "@/services/api";
 
 // M2.5 (D-C1): las materias se administran dentro de su plan de estudios
@@ -36,12 +36,11 @@ const guardarMateria = async () => {
   errorGeneral.value = null;
   guardando.value = true;
   try {
-    // La materia siempre queda en el plan abierto; si la asignatura ya existe
-    // en el catálogo (por ejemplo en otro plan) se reutiliza
-    const nombre = Materias.value.nombre.trim();
+    // La materia siempre queda en el plan abierto (no se mueve entre planes)
+    const datos = { nombre: Materias.value.nombre.trim(), plan_estudio_id: props.plan.id };
     const { message } = editando.value
-      ? await planAsignaturaService.update(props.materia.id, { nombre })
-      : await planAsignaturaService.create({ nombre, plan_estudio_id: props.plan.id });
+      ? await asignaturaService.update(props.materia.id, datos)
+      : await asignaturaService.create(datos);
     Swal.fire({ icon: "success", title: message, timer: 2000, showConfirmButton: false });
     Materias.value = { nombre: "" };
     emit("guardado");
@@ -107,7 +106,7 @@ const guardarMateria = async () => {
 
           <p v-if="errores.nombre || errores.plan_estudio_id" class="text-red-600 text-xs">{{ errores.nombre || errores.plan_estudio_id }}</p>
           <p v-else class="text-xs text-gray-500">
-            Ingresa el nombre de la materia que se impartirá en este plan (no se repite dentro del plan, máximo 50 caracteres). Si ya existe en otro plan, se usa la misma asignatura.
+            Ingresa el nombre de la materia que se impartirá en este plan (no se repite dentro del plan, máximo 50 caracteres).
           </p>
 
         </div>
